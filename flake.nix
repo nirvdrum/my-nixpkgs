@@ -15,5 +15,14 @@
       freecad-weekly = pkgs.callPackage ./pkgs/freecad-weekly { };
       default = self.packages.${system}.freecad-weekly;
     };
+
+    apps.${system}.update-freecad-weekly = {
+      type = "app";
+      # Filters to weekly-YYYY.MM.DD tags only, so a stable 1.x release
+      # landing on the GitHub releases page doesn't get picked up as an update.
+      program = toString (pkgs.writeShellScript "update-freecad-weekly" ''
+        exec ${pkgs.nix-update}/bin/nix-update --flake freecad-weekly --version-regex 'weekly-.*'
+      '');
+    };
   };
 }
