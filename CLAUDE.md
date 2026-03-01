@@ -53,6 +53,22 @@ This repo is a Nix flake. Recommended layout:
 - Use `nixpkgs` as the primary input.
 - Keep each package in its own directory under `pkgs/` for easy extraction when upstreaming to nixpkgs.
 
+## Adding a New Derivation
+
+### General checklist
+
+- Create `pkgs/<name>/default.nix` and expose it in `flake.nix` under `packages.${system}.<name>`.
+- **Stage new files with `git add` before running `nix build`.** Nix flakes evaluate the Git tree, so untracked files are invisible and the build will fail with a misleading path-not-found error.
+- **Hash discovery:** Set `hash = "";` initially, run `nix build`, and copy the correct SRI hash from the mismatch error. Do not guess or derive hashes manually.
+- If the package tracks a frequently-updated upstream (RCs, weekly builds, etc.), add a corresponding `apps.${system}.update-<name>` entry in `flake.nix` that calls `nix-update` with the appropriate `--version-regex` filter. This makes updates a single `nix run` invocation rather than a manual process.
+
+### Additional checklist for AppImage packages
+
+AppImage packages use `appimageTools.wrapType2` and require an extraction step to install desktop entries and icons. Before writing `extraInstallCommands`:
+
+- Inspect the extracted store path (printed in the build output, or found under `/nix/store/*<name>*extracted*`) to confirm the exact desktop file name and icon paths — they often differ from what upstream documentation suggests.
+- Read the `.desktop` file to find the actual `Exec=` line before writing the `substituteInPlace` call. AppImage desktop files frequently use `Exec=AppRun` rather than the binary name.
+
 ## Upstreaming Checklist
 
 Before opening a nixpkgs PR for a package from this repo:
