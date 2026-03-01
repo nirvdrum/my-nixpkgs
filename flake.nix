@@ -1,15 +1,19 @@
 {
-  description = "A very basic flake";
+  description = "Personal Nix packages";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
   };
 
-  outputs = { self, nixpkgs }: {
-
-    packages.x86_64-linux.hello = nixpkgs.legacyPackages.x86_64-linux.hello;
-
-    packages.x86_64-linux.default = self.packages.x86_64-linux.hello;
-
+  outputs = { self, nixpkgs }:
+  let
+    system = "x86_64-linux";
+    pkgs = nixpkgs.legacyPackages.${system};
+  in
+  {
+    packages.${system} = {
+      freecad-weekly = pkgs.callPackage ./pkgs/freecad-weekly { };
+      default = self.packages.${system}.freecad-weekly;
+    };
   };
 }
