@@ -19,10 +19,11 @@ appimageTools.wrapType2 {
   inherit pname version src;
 
   extraInstallCommands = ''
-    install -Dm444 ${appimageContents}/org.freecad.FreeCAD.desktop -t $out/share/applications/
-    substituteInPlace $out/share/applications/org.freecad.FreeCAD.desktop \
-      --replace-fail 'Exec=AppRun' 'Exec=freecad-weekly'
-    cp -r ${appimageContents}/usr/share/icons $out/share/
+    install -Dm444 ${appimageContents}/org.freecad.FreeCAD.desktop \
+      $out/share/applications/freecad-weekly.desktop
+    substituteInPlace $out/share/applications/freecad-weekly.desktop \
+      --replace-fail 'Exec=AppRun' 'Exec=freecad-weekly' \
+      --replace-fail 'Name=FreeCAD' 'Name=FreeCAD Weekly'
   '';
 
   meta = {
