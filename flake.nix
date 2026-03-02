@@ -13,6 +13,7 @@
   {
     packages.${system} = {
       freecad-weekly = pkgs.callPackage ./pkgs/freecad-weekly { };
+      msty-studio = pkgs.callPackage ./pkgs/msty-studio { };
       default = self.packages.${system}.freecad-weekly;
     };
 
