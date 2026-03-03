@@ -12,7 +12,10 @@
   in
   {
     packages = forAllSystems (system:
-      let pkgs = nixpkgs.legacyPackages.${system};
+      let pkgs = import nixpkgs {
+        inherit system;
+        config.allowUnfree = true;
+      };
       in {
         freecad-weekly = pkgs.callPackage ./pkgs/freecad-weekly { };
         msty-studio = pkgs.callPackage ./pkgs/msty-studio { };
