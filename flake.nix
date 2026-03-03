@@ -7,23 +7,29 @@
 
   outputs = { self, nixpkgs }:
   let
-    system = "x86_64-linux";
-    pkgs = nixpkgs.legacyPackages.${system};
+    supportedSystems = [ "x86_64-linux" "aarch64-darwin" ];
+    forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
   in
   {
-    packages.${system} = {
-      freecad-weekly = pkgs.callPackage ./pkgs/freecad-weekly { };
-      msty-studio = pkgs.callPackage ./pkgs/msty-studio { };
-      default = self.packages.${system}.freecad-weekly;
-    };
+    packages = forAllSystems (system:
+      let pkgs = nixpkgs.legacyPackages.${system};
+      in {
+        freecad-weekly = pkgs.callPackage ./pkgs/freecad-weekly { };
+        msty-studio = pkgs.callPackage ./pkgs/msty-studio { };
+        default = self.packages.${system}.freecad-weekly;
+      });
 
-    apps.${system}.update-freecad-weekly = {
-      type = "app";
-      # Filters to weekly-YYYY.MM.DD tags only, so a stable 1.x release
-      # landing on the GitHub releases page doesn't get picked up as an update.
-      program = toString (pkgs.writeShellScript "update-freecad-weekly" ''
-        exec ${pkgs.nix-update}/bin/nix-update --flake freecad-weekly --version-regex 'weekly-.*'
-      '');
-    };
+    apps = forAllSystems (system:
+      let pkgs = nixpkgs.legacyPackages.${system};
+      in {
+        update-freecad-weekly = {
+          type = "app";
+          # Filters to weekly-YYYY.MM.DD tags only, so a stable 1.x release
+          # landing on the GitHub releases page doesn't get picked up as an update.
+          program = toString (pkgs.writeShellScript "update-freecad-weekly" ''
+            exec ${pkgs.nix-update}/bin/nix-update --flake freecad-weekly --version-regex 'weekly-.*'
+          '');
+        };
+      });
   };
 }
