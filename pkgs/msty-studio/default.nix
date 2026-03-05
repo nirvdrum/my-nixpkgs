@@ -3,7 +3,7 @@
   stdenvNoCC,
   appimageTools,
   fetchurl,
-  undmg,
+  _7zz,
 }:
 
 let
@@ -46,14 +46,21 @@ else
 
     src = fetchurl {
       url = "https://next-assets.msty.studio/app/latest/mac/MstyStudio_arm64.dmg?ver=${version}";
+      name = "MstyStudio_arm64.dmg";
       hash = "sha256-F4e6w0vMVpLltHi5ZyTdUlEFYadnBb28t+8t0jidqd0=";
     };
 
-    nativeBuildInputs = [ undmg ];
+    nativeBuildInputs = [ _7zz ];
 
-    # undmg extracts the DMG contents directly into the build directory rather
-    # than a named subdirectory, so we set sourceRoot to suppress Nix's
-    # single-top-level-directory heuristic.
+    # The DMG uses APFS, which undmg does not support. Use 7zz instead,
+    # excluding Apple code signature extended attributes that can cause
+    # the extracted app to malfunction.
+    unpackPhase = ''
+      runHook preUnpack
+      7zz x -xr'!*.app/Contents/_CodeSignature' $src
+      runHook postUnpack
+    '';
+
     sourceRoot = ".";
 
     installPhase = ''
