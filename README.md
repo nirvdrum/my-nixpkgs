@@ -4,9 +4,11 @@ A personal Nix flake containing packages not yet available in nixpkgs. The goal 
 
 ## Packages
 
-| Name | Description |
-|------|-------------|
-| `freecad-weekly` | FreeCAD pre-release builds (RC and weekly), wrapped from the official AppImage |
+| Name               | Description                                                                    |
+|--------------------|--------------------------------------------------------------------------------|
+| `freecad-weekly`   | FreeCAD pre-release builds (RC and weekly), wrapped from the official AppImage  |
+| `msty-studio`      | Desktop application for running and managing local AI models                   |
+| `vibe`             | Easy Linux virtual machine on macOS to sandbox LLM agents (aarch64-darwin only) |
 
 ## Common tasks
 
@@ -72,6 +74,26 @@ finds the newest `weekly-*` tag, and rewrites the `version` and `hash` fields in
 > ```
 > nix-update --flake freecad-weekly
 > ```
+
+**msty-studio** tracks versions published on the [Msty changelog](https://msty.ai/changelog).
+To update to the latest release:
+
+```
+nix run .#update-msty-studio
+```
+
+This fetches the changelog, determines the latest version, prefetches new hashes for
+both the Linux AppImage and macOS DMG, and rewrites `pkgs/msty-studio/default.nix`.
+
+**vibe** tracks date+SHA release tags from the [Vibe GitHub repository](https://github.com/lynaghk/vibe).
+To update to the latest release:
+
+```
+nix run .#update-vibe
+```
+
+This queries the GitHub releases API, finds the newest date+SHA tag, prefetches the
+macOS ARM64 zip hash, and rewrites `pkgs/vibe/default.nix`.
 
 ### Add a new package
 
