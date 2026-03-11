@@ -48,7 +48,11 @@
               sys.exit(1)
 
           print("Fetching Msty changelog...")
-          with urllib.request.urlopen("https://msty.ai/changelog") as response:
+          req = urllib.request.Request(
+              "https://msty.ai/changelog",
+              headers={"User-Agent": "nix-update-msty-studio/1.0"},
+          )
+          with urllib.request.urlopen(req) as response:
               html = response.read().decode()
 
           # The changelog uses anchor IDs of the form id="msty-X.Y.Z" on each
