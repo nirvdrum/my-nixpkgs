@@ -17,6 +17,7 @@
         config.allowUnfree = true;
       };
       in {
+        deadbranch = pkgs.callPackage ./pkgs/deadbranch { };
         freecad-weekly = pkgs.callPackage ./pkgs/freecad-weekly { };
         msty-studio = pkgs.callPackage ./pkgs/msty-studio { };
       }
@@ -203,6 +204,13 @@
         '';
       in
       {
+        update-deadbranch = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "update-deadbranch" ''
+            exec ${pkgs.nix-update}/bin/nix-update --flake deadbranch --version-regex 'v(.*)'
+          '');
+        };
+
         update-freecad-weekly = {
           type = "app";
           # Filters to weekly-YYYY.MM.DD tags only, so a stable 1.x release

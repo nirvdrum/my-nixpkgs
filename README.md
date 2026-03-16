@@ -4,10 +4,11 @@ A personal Nix flake containing packages not yet available in nixpkgs. The goal 
 
 ## Packages
 
-| Name               | Description                                                                    |
-|--------------------|--------------------------------------------------------------------------------|
+| Name               | Description                                                                     |
+|--------------------|---------------------------------------------------------------------------------|
+| `deadbranch`       | CLI tool for safely cleaning up stale git branches                              |
 | `freecad-weekly`   | FreeCAD pre-release builds (RC and weekly), wrapped from the official AppImage  |
-| `msty-studio`      | Desktop application for running and managing local AI models                   |
+| `msty-studio`      | Desktop application for running and managing local AI models                    |
 | `vibe`             | Easy Linux virtual machine on macOS to sandbox LLM agents (aarch64-darwin only) |
 
 ## Common tasks
@@ -74,6 +75,17 @@ finds the newest `weekly-*` tag, and rewrites the `version` and `hash` fields in
 > ```
 > nix-update --flake freecad-weekly
 > ```
+
+**deadbranch** tracks GitHub release tags from the [deadbranch repository](https://github.com/armgabrielyan/deadbranch).
+To update to the latest release:
+
+```
+nix run .#update-deadbranch
+```
+
+This uses `nix-update` under the hood. It queries the deadbranch GitHub releases API,
+finds the newest `v*` tag, and rewrites the `version` and `hash` fields in
+`pkgs/deadbranch/default.nix` automatically.
 
 **msty-studio** tracks versions published on the [Msty changelog](https://msty.ai/changelog).
 To update to the latest release:
