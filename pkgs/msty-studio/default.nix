@@ -8,14 +8,14 @@
 
 let
   pname = "msty-studio";
-  version = "2.5.6";
+  version = "2.6.0";
 in
 
 if stdenvNoCC.hostPlatform.isLinux then
   let
     src = fetchurl {
       url = "https://next-assets.msty.studio/app/latest/linux/MstyStudio_x86_64.AppImage";
-      hash = "sha256-WcuW1fkl699RvKpFTfrK5e/dhkCYDYxxA0qImpbwiYQ=";
+      hash = "sha256-OoDUythquTcJimZnhCztGmCkGSZunI0cC0Q2ydo+if0=";
     };
 
     appimageContents = appimageTools.extractType2 { inherit pname version src; };
@@ -47,7 +47,7 @@ else
     src = fetchurl {
       url = "https://next-assets.msty.studio/app/latest/mac/MstyStudio_arm64.dmg?ver=${version}";
       name = "MstyStudio_arm64.dmg";
-      hash = "sha256-xIaqNgsjXmMnC1V6OxS85AUDv4UbATNVqsuUmWTmhkY=";
+      hash = "sha256-hjCMPXq2B5/VFW3lcdW1sQuvR9F31v4/d3nePY8VpHo=";
     };
 
     nativeBuildInputs = [ _7zz ];
