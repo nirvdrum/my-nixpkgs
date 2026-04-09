@@ -4,12 +4,14 @@ A personal Nix flake containing packages not yet available in nixpkgs. The goal 
 
 ## Packages
 
-| Name               | Description                                                                     |
-|--------------------|---------------------------------------------------------------------------------|
-| `deadbranch`       | CLI tool for safely cleaning up stale git branches                              |
-| `freecad-weekly`   | FreeCAD pre-release builds (RC and weekly), wrapped from the official AppImage  |
-| `msty-studio`      | Desktop application for running and managing local AI models                    |
-| `vibe`             | Easy Linux virtual machine on macOS to sandbox LLM agents (aarch64-darwin only) |
+| Name               | Description                                                                              |
+|--------------------|------------------------------------------------------------------------------------------|
+| `deadbranch`       | CLI tool for safely cleaning up stale git branches                                       |
+| `freecad-weekly`   | FreeCAD pre-release builds (RC and weekly), wrapped from the official AppImage            |
+| `godot-dev`        | Godot game engine development/beta/RC builds (pre-built binary)                          |
+| `godot-dev-mono`   | Godot game engine development/beta/RC builds with C#/.NET support (pre-built binary)     |
+| `msty-studio`      | Desktop application for running and managing local AI models                              |
+| `vibe`             | Easy Linux virtual machine on macOS to sandbox LLM agents (aarch64-darwin only)           |
 
 ## Common tasks
 
@@ -86,6 +88,21 @@ nix run .#update-deadbranch
 This uses `nix-update` under the hood. It queries the deadbranch GitHub releases API,
 finds the newest `v*` tag, and rewrites the `version` and `hash` fields in
 `pkgs/deadbranch/default.nix` automatically.
+
+**godot-dev** and **godot-dev-mono** track pre-release builds from the
+[godot-builds](https://github.com/godotengine/godot-builds) GitHub repository.
+To update to the latest dev/beta/RC snapshot in the current development cycle:
+
+```
+nix run .#update-godot-dev
+```
+
+This queries the GitHub releases API for the newest `dev`, `beta`, or `rc` tag in the
+configured base version series (e.g., 4.7), prefetches fresh hashes for both the
+standard and mono Linux x86_64 archives, and rewrites `pkgs/godot-dev/default.nix`.
+
+> **Note:** When a new major development cycle begins (e.g., 4.8), update the
+> `baseVersion` field in the derivation manually before running the update script.
 
 **msty-studio** tracks versions published on the [Msty changelog](https://msty.ai/changelog).
 To update to the latest release:

@@ -19,6 +19,8 @@
       in {
         deadbranch = pkgs.callPackage ./pkgs/deadbranch { };
         freecad-weekly = pkgs.callPackage ./pkgs/freecad-weekly { };
+        godot-dev = pkgs.callPackage ./pkgs/godot-dev { };
+        godot-dev-mono = pkgs.callPackage ./pkgs/godot-dev { withMono = true; };
         msty-studio = pkgs.callPackage ./pkgs/msty-studio { };
       }
       // nixpkgs.lib.optionalAttrs (system == "aarch64-darwin") {
@@ -120,6 +122,135 @@
           print("Stage the change with: git add pkgs/msty-studio/default.nix")
         '';
 
+        # Queries the godot-builds GitHub releases for the newest pre-release
+        # snapshot in the next Godot development cycle (dev, beta, or rc tags
+        # for the version after the current stable line).  Fetches fresh hashes
+        # for both the standard and mono Linux x86_64 archives and rewrites the
+        # derivation.  Must be run from the root of the flake checkout.
+        updateGodotDevScript = pkgs.writeText "update-godot-dev.py" ''
+          import json
+          import re
+          import subprocess
+          import sys
+          import os
+          import urllib.request
+
+          DERIVATION = "pkgs/godot-dev/default.nix"
+
+          if not os.path.exists(DERIVATION):
+              print("error: run this script from the root of the flake", file=sys.stderr)
+              sys.exit(1)
+
+          with open(DERIVATION) as f:
+              content = f.read()
+
+          base_match = re.search(r'baseVersion = "([^"]+)"', content)
+          pre_match = re.search(r'preLabel = "([^"]+)"', content)
+          if not base_match or not pre_match:
+              print("error: could not find baseVersion/preLabel in derivation", file=sys.stderr)
+              sys.exit(1)
+
+          current_base = base_match.group(1)
+          current_pre = pre_match.group(1)
+          current_tag = f"{current_base}-{current_pre}"
+          print(f"Current: {current_tag}")
+
+          # Fetch recent releases from the godot-builds repository.
+          print("Fetching godot-builds release list...")
+          tag_pattern = re.compile(r"^(\d+\.\d+)-(dev|beta|rc)(\d+)$")
+          page = 1
+          candidates = []
+
+          while page <= 5:
+              url = f"https://api.github.com/repos/godotengine/godot-builds/releases?per_page=50&page={page}"
+              request = urllib.request.Request(
+                  url,
+                  headers={"Accept": "application/vnd.github+json", "User-Agent": "nix-update-godot-dev"},
+              )
+              with urllib.request.urlopen(request) as response:
+                  releases = json.load(response)
+
+              if not releases:
+                  break
+
+              for release in releases:
+                  tag = release.get("tag_name", "")
+                  m = tag_pattern.match(tag)
+                  if m and m.group(1) == current_base:
+                      candidates.append(tag)
+
+              page += 1
+
+          if not candidates:
+              print(f"error: no pre-release tags found for {current_base}", file=sys.stderr)
+              sys.exit(1)
+
+          # Sort candidates so that rc > beta > dev, and higher numbers come first.
+          phase_order = {"rc": 2, "beta": 1, "dev": 0}
+
+          def sort_key(tag):
+              m = tag_pattern.match(tag)
+              return (phase_order.get(m.group(2), -1), int(m.group(3)))
+
+          candidates.sort(key=sort_key, reverse=True)
+          latest_tag = candidates[0]
+          print(f"Latest:  {latest_tag}")
+
+          if current_tag == latest_tag:
+              print("Already up to date.")
+              sys.exit(0)
+
+          m = tag_pattern.match(latest_tag)
+          new_base = m.group(1)
+          new_pre = f"{m.group(2)}{m.group(3)}"
+
+          def prefetch_hash(url):
+              result = subprocess.run(
+                  ["nix", "store", "prefetch-file", url],
+                  capture_output=True, text=True
+              )
+              h = re.search(r"hash '([^']+)'", result.stdout + result.stderr)
+              if not h:
+                  print(f"error: could not fetch hash for {url}", file=sys.stderr)
+                  sys.exit(1)
+              return h.group(1)
+
+          print("Fetching standard Linux x86_64 hash...")
+          std_hash = prefetch_hash(
+              f"https://github.com/godotengine/godot-builds/releases/download/{latest_tag}/Godot_v{latest_tag}_linux.x86_64.zip"
+          )
+
+          print("Fetching mono Linux x86_64 hash...")
+          mono_hash = prefetch_hash(
+              f"https://github.com/godotengine/godot-builds/releases/download/{latest_tag}/Godot_v{latest_tag}_mono_linux_x86_64.zip"
+          )
+
+          content = content.replace(
+              f'baseVersion = "{current_base}"',
+              f'baseVersion = "{new_base}"',
+          )
+          content = content.replace(
+              f'preLabel = "{current_pre}"',
+              f'preLabel = "{new_pre}"',
+          )
+          content = re.sub(
+              r'(linux\.x86_64\.zip";\n\s+hash = ")[^"]+(")',
+              lambda m: m.group(1) + std_hash + m.group(2),
+              content,
+          )
+          content = re.sub(
+              r'(mono_linux_x86_64\.zip";\n\s+hash = ")[^"]+(")',
+              lambda m: m.group(1) + mono_hash + m.group(2),
+              content,
+          )
+
+          with open(DERIVATION, "w") as f:
+              f.write(content)
+
+          print(f"Updated {DERIVATION} from {current_tag} to {latest_tag}.")
+          print("Stage the change with: git add pkgs/godot-dev/default.nix")
+        '';
+
         # Finds the newest date+SHA release tag (excluding the rolling "latest"
         # tag), fetches a fresh hash for the macOS ARM64 zip, and rewrites the
         # derivation. Must be run from the root of the flake checkout.
@@ -217,6 +348,13 @@
           # landing on the GitHub releases page doesn't get picked up as an update.
           program = toString (pkgs.writeShellScript "update-freecad-weekly" ''
             exec ${pkgs.nix-update}/bin/nix-update --flake freecad-weekly --version-regex 'weekly-.*'
+          '');
+        };
+
+        update-godot-dev = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "update-godot-dev" ''
+            exec ${pkgs.python3}/bin/python3 ${updateGodotDevScript}
           '');
         };
 
