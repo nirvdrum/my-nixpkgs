@@ -11,6 +11,7 @@ A personal Nix flake containing packages not yet available in nixpkgs. The goal 
 | `godot-dev`        | Godot game engine development/beta/RC builds (pre-built binary)                          |
 | `godot-dev-mono`   | Godot game engine development/beta/RC builds with C#/.NET support (pre-built binary)     |
 | `msty-studio`      | Desktop application for running and managing local AI models                              |
+| `orion-browser`    | Web browser built by Kagi, using WebKitGTK (early beta, x86_64-linux only)                |
 | `vibe`             | Easy Linux virtual machine on macOS to sandbox LLM agents (aarch64-darwin only)           |
 
 ## Common tasks

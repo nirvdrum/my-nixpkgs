@@ -22,6 +22,7 @@
         godot-dev = pkgs.callPackage ./pkgs/godot-dev { };
         godot-dev-mono = pkgs.callPackage ./pkgs/godot-dev { withMono = true; };
         msty-studio = pkgs.callPackage ./pkgs/msty-studio { };
+        orion-browser = pkgs.callPackage ./pkgs/orion-browser { };
       }
       // nixpkgs.lib.optionalAttrs (system == "aarch64-darwin") {
         vibe = pkgs.callPackage ./pkgs/vibe { };
