@@ -24,6 +24,9 @@
         msty-studio = pkgs.callPackage ./pkgs/msty-studio { };
         orion-browser = pkgs.callPackage ./pkgs/orion-browser { };
       }
+      // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
+        claude-desktop = pkgs.callPackage ./pkgs/claude-desktop { };
+      }
       // nixpkgs.lib.optionalAttrs (system == "aarch64-darwin") {
         vibe = pkgs.callPackage ./pkgs/vibe { };
       }
@@ -252,6 +255,97 @@
           print("Stage the change with: git add pkgs/godot-dev/default.nix")
         '';
 
+        # Queries the claude-desktop-debian GitHub releases for the newest
+        # release tag (format: v<wrapper>+claude<app>), fetches the fresh hash
+        # for the x86_64 AppImage, and rewrites the derivation.  Must be run
+        # from the root of the flake checkout.
+        updateClaudeDesktopScript = pkgs.writeText "update-claude-desktop.py" ''
+          import json
+          import re
+          import subprocess
+          import sys
+          import os
+          import urllib.request
+
+          DERIVATION = "pkgs/claude-desktop/default.nix"
+          REPO_RELEASES_API = "https://api.github.com/repos/aaddrick/claude-desktop-debian/releases?per_page=10"
+          TAG_PATTERN = re.compile(r"^v(\d+\.\d+\.\d+)\+claude(\d+\.\d+\.\d+)$")
+
+          if not os.path.exists(DERIVATION):
+              print("error: run this script from the root of the flake", file=sys.stderr)
+              sys.exit(1)
+
+          print("Fetching claude-desktop-debian release list...")
+          request = urllib.request.Request(
+              REPO_RELEASES_API,
+              headers={"Accept": "application/vnd.github+json", "User-Agent": "nix-update-claude-desktop"},
+          )
+
+          with urllib.request.urlopen(request) as response:
+              releases = json.load(response)
+
+          latest_wrapper = None
+          latest_claude = None
+          for release in releases:
+              tag = release.get("tag_name", "")
+              m = TAG_PATTERN.match(tag)
+              if m:
+                  latest_wrapper = m.group(1)
+                  latest_claude = m.group(2)
+                  break
+
+          if not latest_wrapper or not latest_claude:
+              print("error: could not determine latest release tag", file=sys.stderr)
+              sys.exit(1)
+
+          with open(DERIVATION) as f:
+              content = f.read()
+
+          current_version = re.search(r'version = "([^"]+)"', content)
+          current_wrapper = re.search(r'wrapperVersion = "([^"]+)"', content)
+          if not current_version or not current_wrapper:
+              print("error: could not find current versions in derivation", file=sys.stderr)
+              sys.exit(1)
+
+          current_v = current_version.group(1)
+          current_w = current_wrapper.group(1)
+          print(f"Current: {current_v} (wrapper {current_w})")
+          print(f"Latest:  {latest_claude} (wrapper {latest_wrapper})")
+
+          if current_v == latest_claude and current_w == latest_wrapper:
+              print("Already up to date.")
+              sys.exit(0)
+
+          url = f"https://github.com/aaddrick/claude-desktop-debian/releases/download/v{latest_wrapper}%2Bclaude{latest_claude}/claude-desktop-{latest_claude}-{latest_wrapper}-amd64.AppImage"
+
+          print("Fetching x86_64 AppImage hash...")
+          result = subprocess.run(
+              ["nix", "store", "prefetch-file", url],
+              capture_output=True,
+              text=True,
+          )
+          hash_match = re.search(r"hash '([^']+)'", result.stdout + result.stderr)
+          if not hash_match:
+              print(f"error: could not fetch hash for {url}", file=sys.stderr)
+              sys.exit(1)
+
+          new_hash = hash_match.group(1)
+
+          content = content.replace(f'version = "{current_v}"', f'version = "{latest_claude}"', 1)
+          content = content.replace(f'wrapperVersion = "{current_w}"', f'wrapperVersion = "{latest_wrapper}"', 1)
+          content = re.sub(
+              r'(amd64\.AppImage";\n\s+hash = ")[^"]+(")',
+              lambda m: m.group(1) + new_hash + m.group(2),
+              content,
+          )
+
+          with open(DERIVATION, "w") as f:
+              f.write(content)
+
+          print(f"Updated {DERIVATION}: {current_v} -> {latest_claude} (wrapper {current_w} -> {latest_wrapper}).")
+          print("Stage the change with: git add pkgs/claude-desktop/default.nix")
+        '';
+
         # Finds the newest date+SHA release tag (excluding the rolling "latest"
         # tag), fetches a fresh hash for the macOS ARM64 zip, and rewrites the
         # derivation. Must be run from the root of the flake checkout.
@@ -336,6 +430,13 @@
         '';
       in
       {
+        update-claude-desktop = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "update-claude-desktop" ''
+            exec ${pkgs.python3}/bin/python3 ${updateClaudeDesktopScript}
+          '');
+        };
+
         update-deadbranch = {
           type = "app";
           program = toString (pkgs.writeShellScript "update-deadbranch" ''

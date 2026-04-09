@@ -6,6 +6,7 @@ A personal Nix flake containing packages not yet available in nixpkgs. The goal 
 
 | Name               | Description                                                                              |
 |--------------------|------------------------------------------------------------------------------------------|
+| `claude-desktop`   | Anthropic's Claude AI desktop application for Linux (unofficial package)                  |
 | `deadbranch`       | CLI tool for safely cleaning up stale git branches                                       |
 | `freecad-weekly`   | FreeCAD pre-release builds (RC and weekly), wrapped from the official AppImage            |
 | `godot-dev`        | Godot game engine development/beta/RC builds (pre-built binary)                          |
@@ -78,6 +79,18 @@ finds the newest `weekly-*` tag, and rewrites the `version` and `hash` fields in
 > ```
 > nix-update --flake freecad-weekly
 > ```
+
+**claude-desktop** tracks releases from the unofficial
+[claude-desktop-debian](https://github.com/aaddrick/claude-desktop-debian) project, which
+repackages Anthropic's Claude Desktop as AppImages for Linux. To update to the latest release:
+
+```
+nix run .#update-claude-desktop
+```
+
+This queries the GitHub releases API, finds the newest release tag (format
+`v<wrapper>+claude<app>`), prefetches the x86_64 AppImage hash, and rewrites
+`pkgs/claude-desktop/default.nix`.
 
 **deadbranch** tracks GitHub release tags from the [deadbranch repository](https://github.com/armgabrielyan/deadbranch).
 To update to the latest release:
