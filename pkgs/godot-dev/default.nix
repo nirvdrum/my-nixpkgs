@@ -2,6 +2,8 @@
   lib,
   stdenvNoCC,
   fetchurl,
+  copyDesktopItems,
+  makeDesktopItem,
   unzip,
   makeWrapper,
   alsa-lib,
@@ -85,12 +87,36 @@ let
   runtimeLibPath = lib.makeLibraryPath runtimeLibs;
 
   dotnet-sdk = dotnetCorePackages.sdk_9_0;
+
+  desktopName =
+    if withMono
+    then "Godot Engine ${baseVersion} Dev (Mono)"
+    else "Godot Engine ${baseVersion} Dev";
+
+  desktopItem = makeDesktopItem {
+    name = pname;
+    desktopName = desktopName;
+    comment = "Multi-platform 2D and 3D game engine with a feature-rich editor";
+    exec = "${pname} %f";
+    icon = "godot";
+    terminal = false;
+    type = "Application";
+    mimeTypes = [ "application/x-godot-project" ];
+    categories = [ "Development" "IDE" ];
+    startupWMClass = "Godot";
+    keywords = [ "game development" "development" "IDE" "game engine" ];
+  };
+
+  icon = fetchurl {
+    url = "https://raw.githubusercontent.com/godotengine/godot/master/icon.svg";
+    hash = "sha256-FEOul0hCuBdl1bUOanKeu/Qeui6eUVqwkZ8upci49HU=";
+  };
 in
 
 stdenvNoCC.mkDerivation {
   inherit pname version src;
 
-  nativeBuildInputs = [ unzip makeWrapper ];
+  nativeBuildInputs = [ copyDesktopItems unzip makeWrapper ];
 
   # The standard zip contains a bare binary at the top level; the mono zip
   # contains a directory.  Tell Nix not to expect a single top-level directory
@@ -120,8 +146,12 @@ stdenvNoCC.mkDerivation {
       makeWrapper "$out/libexec/${pname}/${binaryName}" "$out/bin/${pname}" \
         ${wrapperArgs}
 
+      install -Dm444 ${icon} "$out/share/icons/hicolor/scalable/apps/godot.svg"
+
       runHook postInstall
     '';
+
+  desktopItems = [ desktopItem ];
 
   meta = {
     description = "Free and open source 2D and 3D game engine (development release${lib.optionalString withMono ", with C#/.NET support"})";
