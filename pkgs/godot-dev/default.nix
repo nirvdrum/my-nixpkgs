@@ -101,8 +101,8 @@ stdenvNoCC.mkDerivation {
     let
       copyBinary =
         if withMono
-        then ''cp -r "Godot_v${version}_mono_linux_x86_64"/* "$out/libexec/"''
-        else ''install -m755 "${binaryName}" "$out/libexec/"'';
+        then ''cp -r "Godot_v${version}_mono_linux_x86_64"/* "$out/libexec/${pname}/"''
+        else ''install -m755 "${binaryName}" "$out/libexec/${pname}/"'';
 
       wrapperArgs = lib.concatStringsSep " " ([
         ''--prefix LD_LIBRARY_PATH : "${runtimeLibPath}"''
@@ -113,11 +113,11 @@ stdenvNoCC.mkDerivation {
     ''
       runHook preInstall
 
-      mkdir -p "$out/libexec"
+      mkdir -p "$out/libexec/${pname}"
       ${copyBinary}
 
       mkdir -p "$out/bin"
-      makeWrapper "$out/libexec/${binaryName}" "$out/bin/${pname}" \
+      makeWrapper "$out/libexec/${pname}/${binaryName}" "$out/bin/${pname}" \
         ${wrapperArgs}
 
       runHook postInstall
