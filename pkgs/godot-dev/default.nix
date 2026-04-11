@@ -37,18 +37,18 @@ let
   # (e.g., "dev3", "beta1", "rc1").  Together they form the tag used by the
   # godot-builds repository on GitHub.
   baseVersion = "4.7";
-  preLabel = "dev3";
+  preLabel = "dev4";
   version = "${baseVersion}-${preLabel}";
 
   srcs = {
     standard = fetchurl {
       url = "https://github.com/godotengine/godot-builds/releases/download/${version}/Godot_v${version}_linux.x86_64.zip";
-      hash = "sha256-+UtyBhZjrXOOpNWbGMnsZQXkMYRO4mGyVSeFqLjVOkY=";
+      hash = "sha256-9oBqCTVpt9Zhv4rA8qyoEIQul6w3PRswhH33TPhNg9M=";
     };
 
     mono = fetchurl {
       url = "https://github.com/godotengine/godot-builds/releases/download/${version}/Godot_v${version}_mono_linux_x86_64.zip";
-      hash = "sha256-6k5mdjr8jfHw0aSQzTzxCZlcPUwTgo2WgfU9cvdjr5g=";
+      hash = "sha256-n3i4j2lrSIZ8O5mhbLtb/qEH8rpsdWlLRL5cRRuEcGg=";
     };
   };
 
