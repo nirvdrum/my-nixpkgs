@@ -25,6 +25,7 @@
   pango,
   gdk-pixbuf,
   librsvg,
+  woff2,
   mesa,
   libGL,
   vulkan-loader,
@@ -72,6 +73,7 @@ stdenv.mkDerivation {
     pango
     gdk-pixbuf
     librsvg
+    woff2
     mesa
     libGL
     vulkan-loader
