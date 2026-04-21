@@ -473,6 +473,31 @@
             exec ${pkgs.python3}/bin/python3 ${updateVibeScript}
           '');
         };
+
+        update-all = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "update-all" ''
+            failed=""
+
+            for app in update-claude-desktop update-deadbranch update-freecad-weekly update-godot-dev update-msty-studio update-vibe; do
+              echo "=== Running $app ==="
+              if nix run .#"$app"; then
+                echo "=== $app completed successfully ==="
+              else
+                echo "=== $app failed ==="
+                failed="$failed $app"
+              fi
+              echo ""
+            done
+
+            if [ -n "$failed" ]; then
+              echo "The following updaters failed:$failed"
+              exit 1
+            else
+              echo "All updaters completed successfully."
+            fi
+          '');
+        };
       });
   };
 }
