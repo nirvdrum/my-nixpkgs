@@ -47,7 +47,7 @@ else
     src = fetchurl {
       url = "https://next-assets.msty.studio/app/latest/mac/MstyStudio_arm64.dmg?ver=${version}";
       name = "MstyStudio_arm64.dmg";
-      hash = "sha256-pV6p4xUem0u976OYc6ftOs48d1cPzp93bo4sHiJ2I3M=";
+      hash = "sha256-onRcXkOoUVWLkdvnsa89wqD8qLPhpnpCMjeABVsBjYc=";
     };
 
     nativeBuildInputs = [ _7zz ];
