@@ -6,12 +6,12 @@
 
 let
   pname = "claude-desktop";
-  version = "1.3883.0";
-  wrapperVersion = "2.0.5";
+  version = "1.5354.0";
+  wrapperVersion = "2.0.8";
 
   src = fetchurl {
     url = "https://github.com/aaddrick/claude-desktop-debian/releases/download/v${wrapperVersion}%2Bclaude${version}/${pname}-${version}-${wrapperVersion}-amd64.AppImage";
-    hash = "sha256-iySGevovI5ImWcuOVqGVIEjd6nc1BQuL90mFMzpJIQ8=";
+    hash = "sha256-vli4kfOpjl7dUyLZptd+XwDjdFoJyFKq4TMIspfQD9A=";
   };
 
   appimageContents = appimageTools.extractType2 { inherit pname version src; };
