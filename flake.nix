@@ -220,13 +220,23 @@
               return h.group(1)
 
           print("Fetching standard Linux x86_64 hash...")
-          std_hash = prefetch_hash(
+          linux_std_hash = prefetch_hash(
               f"https://github.com/godotengine/godot-builds/releases/download/{latest_tag}/Godot_v{latest_tag}_linux.x86_64.zip"
           )
 
           print("Fetching mono Linux x86_64 hash...")
-          mono_hash = prefetch_hash(
+          linux_mono_hash = prefetch_hash(
               f"https://github.com/godotengine/godot-builds/releases/download/{latest_tag}/Godot_v{latest_tag}_mono_linux_x86_64.zip"
+          )
+
+          print("Fetching standard macOS universal hash...")
+          macos_std_hash = prefetch_hash(
+              f"https://github.com/godotengine/godot-builds/releases/download/{latest_tag}/Godot_v{latest_tag}_macos.universal.zip"
+          )
+
+          print("Fetching mono macOS universal hash...")
+          macos_mono_hash = prefetch_hash(
+              f"https://github.com/godotengine/godot-builds/releases/download/{latest_tag}/Godot_v{latest_tag}_mono_macos.universal.zip"
           )
 
           content = content.replace(
@@ -239,12 +249,22 @@
           )
           content = re.sub(
               r'(linux\.x86_64\.zip";\n\s+hash = ")[^"]+(")',
-              lambda m: m.group(1) + std_hash + m.group(2),
+              lambda m: m.group(1) + linux_std_hash + m.group(2),
               content,
           )
           content = re.sub(
               r'(mono_linux_x86_64\.zip";\n\s+hash = ")[^"]+(")',
-              lambda m: m.group(1) + mono_hash + m.group(2),
+              lambda m: m.group(1) + linux_mono_hash + m.group(2),
+              content,
+          )
+          content = re.sub(
+              r'(_macos\.universal\.zip";\n\s+hash = ")[^"]+(")',
+              lambda m: m.group(1) + macos_std_hash + m.group(2),
+              content,
+          )
+          content = re.sub(
+              r'(_mono_macos\.universal\.zip";\n\s+hash = ")[^"]+(")',
+              lambda m: m.group(1) + macos_mono_hash + m.group(2),
               content,
           )
 

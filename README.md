@@ -112,8 +112,9 @@ nix run .#update-godot-dev
 ```
 
 This queries the GitHub releases API for the newest `dev`, `beta`, or `rc` tag in the
-configured base version series (e.g., 4.7), prefetches fresh hashes for both the
-standard and mono Linux x86_64 archives, and rewrites `pkgs/godot-dev/default.nix`.
+configured base version series (e.g., 4.7), prefetches fresh hashes for the standard
+and mono variants on both Linux x86_64 and macOS (universal binary), and rewrites
+`pkgs/godot-dev/default.nix`.
 
 > **Note:** When a new major development cycle begins (e.g., 4.8), update the
 > `baseVersion` field in the derivation manually before running the update script.
