@@ -17,16 +17,26 @@ if stdenvNoCC.hostPlatform.isLinux then
       hash = "sha256-Yxf6jvouW2TOeegtWMMO0TAGGIqv0MES8C81wAsnqBU=";
     };
 
-    appimageContents = appimageTools.extractType2 { inherit pname version src; };
+    # The AppImage bundles libwayland-client.so which, when loaded on
+    # Wayland-capable hosts, triggers EGL display creation failures
+    # (EGL_BAD_PARAMETER).  Upstream PR #805 applies the same fix.
+    # Removing the bundled library forces a fallback to X11 via the
+    # AppImage's GTK hook (GDK_BACKEND=x11).
+    appimageContents = appimageTools.extract {
+      inherit pname version src;
+
+      postExtract = ''
+        rm -f $out/usr/lib/libwayland-client*
+      '';
+    };
   in
-  appimageTools.wrapType2 {
-    inherit pname version src;
+  appimageTools.wrapAppImage {
+    inherit pname version;
+    src = appimageContents;
 
     extraInstallCommands = ''
       install -Dm444 ${appimageContents}/Whispering.desktop \
         $out/share/applications/whispering.desktop
-      substituteInPlace $out/share/applications/whispering.desktop \
-        --replace-fail 'Exec=AppRun' 'Exec=whispering'
       cp -r ${appimageContents}/usr/share/icons $out/share/
     '';
 
