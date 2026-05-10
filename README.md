@@ -14,6 +14,7 @@ A personal Nix flake containing packages not yet available in nixpkgs. The goal 
 | `msty-studio`      | Desktop application for running and managing local AI models                              |
 | `orion-browser`    | Web browser built by Kagi, using WebKitGTK (early beta, x86_64-linux only)                |
 | `vibe`             | Easy Linux virtual machine on macOS to sandbox LLM agents (aarch64-darwin only)           |
+| `whispering`       | Local-first speech-to-text: press shortcut, speak, get text (open source)                |
 
 ## Common tasks
 
@@ -138,6 +139,20 @@ nix run .#update-vibe
 
 This queries the GitHub releases API, finds the newest date+SHA tag, prefetches the
 macOS ARM64 zip hash, and rewrites `pkgs/vibe/default.nix`.
+
+**whispering** tracks Whispering releases from the
+[EpicenterHQ/epicenter](https://github.com/EpicenterHQ/epicenter) monorepo.  The
+monorepo also publishes non-Whispering tags (e.g. `models/<name>` and `_assets`),
+so the updater filters releases to those that match `v<X.Y.Z>` *and* ship a
+Whispering AppImage asset.  To update to the latest release:
+
+```
+nix run .#update-whispering
+```
+
+This queries the GitHub releases API, finds the newest qualifying release, prefetches
+fresh hashes for both the Linux x86_64 AppImage and the macOS aarch64 `.app` tarball,
+and rewrites `pkgs/whispering/default.nix`.
 
 ### Add a new package
 

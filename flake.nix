@@ -23,6 +23,7 @@
         godot-dev-mono = pkgs.callPackage ./pkgs/godot-dev { withMono = true; };
         msty-studio = pkgs.callPackage ./pkgs/msty-studio { };
         orion-browser = pkgs.callPackage ./pkgs/orion-browser { };
+        whispering = pkgs.callPackage ./pkgs/whispering { };
       }
       // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
         claude-desktop = pkgs.callPackage ./pkgs/claude-desktop { };
@@ -366,6 +367,113 @@
           print("Stage the change with: git add pkgs/claude-desktop/default.nix")
         '';
 
+        # Queries the EpicenterHQ/epicenter GitHub releases for the newest
+        # Whispering release tag (format: v<X.Y.Z>) and rewrites the
+        # derivation with fresh hashes for the Linux x86_64 AppImage and the
+        # macOS aarch64 .app tarball.  The monorepo also publishes non-
+        # Whispering tags such as `_assets` and `models/<name>`; we filter
+        # those out by both the tag regex and by verifying that the chosen
+        # release ships a Whispering AppImage asset.  Must be run from the
+        # root of the flake checkout.
+        updateWhisperingScript = pkgs.writeText "update-whispering.py" ''
+          import json
+          import re
+          import subprocess
+          import sys
+          import os
+          import urllib.request
+
+          DERIVATION = "pkgs/whispering/default.nix"
+          REPO_RELEASES_API = "https://api.github.com/repos/EpicenterHQ/epicenter/releases?per_page=30"
+          TAG_PATTERN = re.compile(r"^v(\d+\.\d+\.\d+)$")
+
+          if not os.path.exists(DERIVATION):
+              print("error: run this script from the root of the flake", file=sys.stderr)
+              sys.exit(1)
+
+          print("Fetching EpicenterHQ/epicenter release list...")
+          request = urllib.request.Request(
+              REPO_RELEASES_API,
+              headers={"Accept": "application/vnd.github+json", "User-Agent": "nix-update-whispering"},
+          )
+
+          with urllib.request.urlopen(request) as response:
+              releases = json.load(response)
+
+          # Iterate in API order (newest first) until we find a tag that both
+          # matches our version pattern and ships a Whispering asset.  This
+          # protects against future tags in the monorepo that share the v*
+          # prefix but are not Whispering releases.
+          latest = None
+          for release in releases:
+              tag = release.get("tag_name", "")
+              m = TAG_PATTERN.match(tag)
+              if not m:
+                  continue
+              asset_names = [asset.get("name", "") for asset in release.get("assets", [])]
+              if any(name.startswith("Whispering_") and name.endswith(".AppImage") for name in asset_names):
+                  latest = m.group(1)
+                  break
+
+          if not latest:
+              print("error: could not determine latest Whispering release tag", file=sys.stderr)
+              sys.exit(1)
+
+          with open(DERIVATION) as f:
+              content = f.read()
+
+          current_match = re.search(r'version = "([^"]+)"', content)
+          if not current_match:
+              print("error: could not find current version in derivation", file=sys.stderr)
+              sys.exit(1)
+
+          current = current_match.group(1)
+          print(f"Current: {current}  Latest: {latest}")
+
+          if current == latest:
+              print("Already up to date.")
+              sys.exit(0)
+
+          def prefetch_hash(url):
+              result = subprocess.run(
+                  ["nix", "store", "prefetch-file", url],
+                  capture_output=True, text=True
+              )
+              h = re.search(r"hash '([^']+)'", result.stdout + result.stderr)
+              if not h:
+                  print(f"error: could not fetch hash for {url}", file=sys.stderr)
+                  sys.exit(1)
+              return h.group(1)
+
+          print("Fetching Linux x86_64 AppImage hash...")
+          linux_hash = prefetch_hash(
+              f"https://github.com/EpicenterHQ/epicenter/releases/download/v{latest}/Whispering_{latest}_amd64.AppImage"
+          )
+
+          print("Fetching macOS aarch64 .app tarball hash...")
+          macos_hash = prefetch_hash(
+              f"https://github.com/EpicenterHQ/epicenter/releases/download/v{latest}/Whispering_aarch64.app.tar.gz"
+          )
+
+          content = content.replace(f'version = "{current}"', f'version = "{latest}"', 1)
+          content = re.sub(
+              r'(amd64\.AppImage";\n\s+hash = ")[^"]+(")',
+              lambda m: m.group(1) + linux_hash + m.group(2),
+              content,
+          )
+          content = re.sub(
+              r'(aarch64\.app\.tar\.gz";\n\s+hash = ")[^"]+(")',
+              lambda m: m.group(1) + macos_hash + m.group(2),
+              content,
+          )
+
+          with open(DERIVATION, "w") as f:
+              f.write(content)
+
+          print(f"Updated {DERIVATION} from {current} to {latest}.")
+          print("Stage the change with: git add pkgs/whispering/default.nix")
+        '';
+
         # Finds the newest date+SHA release tag (excluding the rolling "latest"
         # tag), fetches a fresh hash for the macOS ARM64 zip, and rewrites the
         # derivation. Must be run from the root of the flake checkout.
@@ -494,12 +602,19 @@
           '');
         };
 
+        update-whispering = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "update-whispering" ''
+            exec ${pkgs.python3}/bin/python3 ${updateWhisperingScript}
+          '');
+        };
+
         update-all = {
           type = "app";
           program = toString (pkgs.writeShellScript "update-all" ''
             failed=""
 
-            for app in update-claude-desktop update-deadbranch update-freecad-weekly update-godot-dev update-msty-studio update-vibe; do
+            for app in update-claude-desktop update-deadbranch update-freecad-weekly update-godot-dev update-msty-studio update-vibe update-whispering; do
               echo "=== Running $app ==="
               if nix run .#"$app"; then
                 echo "=== $app completed successfully ==="
