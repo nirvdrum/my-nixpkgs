@@ -8,14 +8,15 @@
 
 let
   pname = "freecad-weekly";
-  version = "1.1rc3";
+  version = "2026.05.06";
+  tag = "weekly-${version}";
 in
 
 if stdenvNoCC.hostPlatform.isLinux then
   let
     src = fetchurl {
-      url = "https://github.com/FreeCAD/FreeCAD/releases/download/${version}/FreeCAD_${version}-Linux-x86_64-py311.AppImage";
-      hash = "sha256-QjJj1MRehKh1ajCOSpAFpvPM7/3Sw3/y9cEZntqISf0=";
+      url = "https://github.com/FreeCAD/FreeCAD/releases/download/${tag}/FreeCAD_${tag}-Linux-x86_64.AppImage";
+      hash = "sha256-CgqX/SJ10yGFIP+DVPXqWUQM1qR6QYU7FrRNx/FCQQ8=";
     };
 
     appimageContents = appimageTools.extractType2 { inherit pname version src; };
@@ -44,7 +45,7 @@ else
     inherit pname version;
 
     src = fetchurl {
-      url = "https://github.com/FreeCAD/FreeCAD/releases/download/${version}/FreeCAD_${version}-macOS-arm64-py311.dmg";
+      url = "https://github.com/FreeCAD/FreeCAD/releases/download/${tag}/FreeCAD_${tag}-macOS11-arm64.dmg";
       hash = "sha256-U5waEb7o6kTWQN2Zo9fdK3JqE/gkgn5j7b/vomtqJMw=";
     };
 
