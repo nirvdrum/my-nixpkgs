@@ -39,13 +39,13 @@
 stdenv.mkDerivation {
   pname = "orion-browser";
 
-  # The upstream Flatpak bundle has no formal version; the filename
-  # contains "earlybeta.1" and the bundle was last updated on 2026-03-17.
-  version = "0-unstable-2026-03-17";
+  # The upstream Flatpak bundle uses a rolling "latest" URL with no
+  # formal version, so we pin a date and set the hash to match.
+  version = "0-unstable-2026-05-16";
 
   src = fetchurl {
-    url = "https://cdn.kagi.com/downloads/oriongtk.earlybeta.1.flatpak";
-    hash = "sha256-bX2k0SPyPuaGhYBKJfEn/QnIK2BLBfDjaku8eGfQ+Z4=";
+    url = "https://orionbrowser.com/download/latest.flatpak";
+    hash = "sha256-0NOWPS2Yv5NpnTxqsiMvshHFyTyDotPi964/2og/bCw=";
   };
 
   nativeBuildInputs = [

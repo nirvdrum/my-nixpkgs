@@ -12,7 +12,7 @@ A personal Nix flake containing packages not yet available in nixpkgs. The goal 
 | `godot-dev`        | Godot game engine development/beta/RC builds (pre-built binary)                          |
 | `godot-dev-mono`   | Godot game engine development/beta/RC builds with C#/.NET support (pre-built binary)     |
 | `msty-studio`      | Desktop application for running and managing local AI models                              |
-| `orion-browser`    | Web browser built by Kagi, using WebKitGTK (early beta, x86_64-linux only)                |
+| `orion-browser`    | Web browser built by Kagi, using WebKitGTK (early beta, x86_64-linux only)               |
 | `vibe`             | Easy Linux virtual machine on macOS to sandbox LLM agents (aarch64-darwin only)           |
 | `whispering`       | Local-first speech-to-text: press shortcut, speak, get text (open source)                |
 
@@ -139,6 +139,16 @@ nix run .#update-vibe
 
 This queries the GitHub releases API, finds the newest date+SHA tag, prefetches the
 macOS ARM64 zip hash, and rewrites `pkgs/vibe/default.nix`.
+
+**orion-browser** tracks the rolling `latest.flatpak` build from
+[orionbrowser.com](https://orionbrowser.com). Since the URL is rolling and has no version tag,
+updates require a manual hash refresh. To update:
+
+```
+# Set hash = "" in pkgs/orion-browser/default.nix, then:
+git add pkgs/orion-browser/default.nix && nix build .#orion-browser 2>&1 | grep -oP 'sha256-\S+'
+# Copy the hash back into the derivation and update the version date.
+```
 
 **whispering** tracks Whispering releases from the
 [EpicenterHQ/epicenter](https://github.com/EpicenterHQ/epicenter) monorepo.  The
