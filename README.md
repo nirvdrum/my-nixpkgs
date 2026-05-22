@@ -13,6 +13,9 @@ A personal Nix flake containing packages not yet available in nixpkgs. The goal 
 | `godot-dev-mono`   | Godot game engine development/beta/RC builds with C#/.NET support (pre-built binary)     |
 | `msty-studio`      | Desktop application for running and managing local AI models                              |
 | `orion-browser`    | Web browser built by Kagi, using WebKitGTK (early beta, x86_64-linux only)               |
+| `textgen`          | Local LLM inference UI — CPU default (Linux x86_64) or ARM64 (macOS)                     |
+| `textgen-rocm`     | Local LLM inference UI — ROCm variant (Linux x86_64 only)                                |
+| `textgen-vulkan`   | Local LLM inference UI — Vulkan variant (Linux x86_64 only)                              |
 | `vibe`             | Easy Linux virtual machine on macOS to sandbox LLM agents (aarch64-darwin only)           |
 | `whispering`       | Local-first speech-to-text: press shortcut, speak, get text (open source)                |
 
@@ -119,6 +122,17 @@ and mono variants on both Linux x86_64 and macOS (universal binary), and rewrite
 
 > **Note:** When a new major development cycle begins (e.g., 4.8), update the
 > `baseVersion` field in the derivation manually before running the update script.
+
+**textgen** tracks release tags from the [oobabooga/textgen](https://github.com/oobabooga/textgen) GitHub
+repository.  To update to the latest release:
+
+```
+nix run .#update-textgen
+```
+
+This queries the GitHub releases API, finds the newest `v<X.Y>` tag, prefetches
+fresh hashes for all four variant assets (linux-cpu, linux-vulkan, linux-rocm, and
+macos-arm64), and rewrites `pkgs/textgen/default.nix`.
 
 **msty-studio** tracks versions published on the [Msty changelog](https://msty.ai/changelog).
 To update to the latest release:

@@ -23,10 +23,13 @@
         godot-dev-mono = pkgs.callPackage ./pkgs/godot-dev { withMono = true; };
         msty-studio = pkgs.callPackage ./pkgs/msty-studio { };
         orion-browser = pkgs.callPackage ./pkgs/orion-browser { };
+        textgen = pkgs.callPackage ./pkgs/textgen { };
         whispering = pkgs.callPackage ./pkgs/whispering { };
       }
       // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
         claude-desktop = pkgs.callPackage ./pkgs/claude-desktop { };
+        textgen-vulkan = pkgs.callPackage ./pkgs/textgen { variant = "vulkan"; };
+        textgen-rocm = pkgs.callPackage ./pkgs/textgen { variant = "rocm"; };
       }
       // nixpkgs.lib.optionalAttrs (system == "aarch64-darwin") {
         vibe = pkgs.callPackage ./pkgs/vibe { };
@@ -474,6 +477,109 @@
           print("Stage the change with: git add pkgs/whispering/default.nix")
         '';
 
+        # Queries the oobabooga/textgen GitHub releases for the newest
+        # release tag (format: v<X.Y.Z>), fetches fresh hashes for all
+        # variant assets (cpu, vulkan, rocm on Linux; arm64 on macOS),
+        # and rewrites the derivation.  Must be run from the root of
+        # the flake checkout.
+        updateTextgenScript = pkgs.writeText "update-textgen.py" ''
+          import json
+          import re
+          import subprocess
+          import sys
+          import os
+          import urllib.request
+
+          DERIVATION = "pkgs/textgen/default.nix"
+          REPO_RELEASES_API = "https://api.github.com/repos/oobabooga/textgen/releases?per_page=10"
+          TAG_PATTERN = re.compile(r"^v(\d+\.\d+)$")
+
+          if not os.path.exists(DERIVATION):
+              print("error: run this script from the root of the flake", file=sys.stderr)
+              sys.exit(1)
+
+          print("Fetching textgen release list...")
+          request = urllib.request.Request(
+              REPO_RELEASES_API,
+              headers={"Accept": "application/vnd.github+json", "User-Agent": "nix-update-textgen"},
+          )
+
+          with urllib.request.urlopen(request) as response:
+              releases = json.load(response)
+
+          latest = None
+          for release in releases:
+              tag = release.get("tag_name", "")
+              m = TAG_PATTERN.match(tag)
+              if m:
+                  latest = m.group(1)
+                  break
+
+          if not latest:
+              print("error: could not determine latest release tag", file=sys.stderr)
+              sys.exit(1)
+
+          with open(DERIVATION) as f:
+              content = f.read()
+
+          current_match = re.search(r'version = "([^"]+)"', content)
+          if not current_match:
+              print("error: could not find current version in derivation", file=sys.stderr)
+              sys.exit(1)
+
+          current = current_match.group(1)
+          print(f"Current: {current}  Latest: {latest}")
+
+          if current == latest:
+              print("Already up to date.")
+              sys.exit(0)
+
+          def prefetch_hash(url):
+              result = subprocess.run(
+                  ["nix", "store", "prefetch-file", url],
+                  capture_output=True, text=True
+              )
+              h = re.search(r"hash '([^']+)'", result.stdout + result.stderr)
+              if not h:
+                  print(f"error: could not fetch hash for {url}", file=sys.stderr)
+                  sys.exit(1)
+              return h.group(1)
+
+          # Linux variants: cpu, vulkan, rocm; macOS: arm64
+          variants = ["linux-cpu", "linux-vulkan", "linux-rocm", "macos-arm64"]
+          hash_map = {}
+
+          # The ROCm asset has ".2" appended to the variant name
+          def asset_suffix(v):
+              if v == "linux-rocm":
+                  return "linux-rocm7.2"
+              return v
+
+          for v in variants:
+              suffix = asset_suffix(v)
+              url = f"https://github.com/oobabooga/textgen/releases/download/v{latest}/textgen-portable-{latest}-{suffix}.tar.gz"
+              print(f"Fetching hash for {v}...")
+              hash_map[v] = prefetch_hash(url)
+
+          # Replace version
+          content = content.replace(f'version = "{current}"', f'version = "{latest}"', 1)
+
+          # Replace hashes in the hash attribute set
+          for v in variants:
+              key = v  # the nix attr key, e.g. "linux-cpu", "macos-arm64"
+              content = re.sub(
+                  rf'("{key}" \= \")[^"]+(")',
+                  lambda m: m.group(1) + hash_map[v] + m.group(2),
+                  content
+              )
+
+          with open(DERIVATION, "w") as f:
+              f.write(content)
+
+          print(f"Updated {DERIVATION} from {current} to {latest}.")
+          print("Stage the change with: git add pkgs/textgen/default.nix")
+        '';
+
         # Finds the newest date+SHA release tag (excluding the rolling "latest"
         # tag), fetches a fresh hash for the macOS ARM64 zip, and rewrites the
         # derivation. Must be run from the root of the flake checkout.
@@ -595,6 +701,13 @@
           '');
         };
 
+        update-textgen = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "update-textgen" ''
+            exec ${pkgs.python3}/bin/python3 ${updateTextgenScript}
+          '');
+        };
+
         update-vibe = {
           type = "app";
           program = toString (pkgs.writeShellScript "update-vibe" ''
@@ -614,7 +727,7 @@
           program = toString (pkgs.writeShellScript "update-all" ''
             failed=""
 
-            for app in update-claude-desktop update-deadbranch update-freecad-weekly update-godot-dev update-msty-studio update-vibe update-whispering; do
+            for app in update-claude-desktop update-deadbranch update-freecad-weekly update-godot-dev update-msty-studio update-textgen update-vibe update-whispering; do
               echo "=== Running $app ==="
               if nix run .#"$app"; then
                 echo "=== $app completed successfully ==="
