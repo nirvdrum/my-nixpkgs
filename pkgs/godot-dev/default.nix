@@ -157,7 +157,7 @@ else
       desktopName = desktopName;
       comment = "Multi-platform 2D and 3D game engine with a feature-rich editor";
       exec = "${pname} %f";
-      icon = "godot";
+      icon = "godot-dev";
       terminal = false;
       type = "Application";
       mimeTypes = [ "application/x-godot-project" ];
@@ -167,9 +167,10 @@ else
     };
 
     icon = fetchurl {
-      url = "https://raw.githubusercontent.com/godotengine/godot/master/icon.svg";
-      hash = "sha256-FEOul0hCuBdl1bUOanKeu/Qeui6eUVqwkZ8upci49HU=";
+      url = "https://godotengine.org/assets/press/icon_color.svg";
+      hash = "sha256-fi8Xz0OhUeJnNkaFRAI87YwHIQxXudI4JkofGyivmGg=";
     };
+
   in
   stdenvNoCC.mkDerivation {
     inherit pname version src;
@@ -204,7 +205,7 @@ else
         makeWrapper "$out/libexec/${pname}/${binaryName}" "$out/bin/${pname}" \
           ${wrapperArgs}
 
-        install -Dm444 ${icon} "$out/share/icons/hicolor/scalable/apps/godot.svg"
+        install -Dm444 ${icon} "$out/share/icons/hicolor/scalable/apps/godot-dev.svg"
 
         runHook postInstall
       '';
