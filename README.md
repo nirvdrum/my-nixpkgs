@@ -8,6 +8,7 @@ A personal Nix flake containing packages not yet available in nixpkgs. The goal 
 |--------------------|------------------------------------------------------------------------------------------|
 | `claude-desktop`   | Anthropic's Claude AI desktop application for Linux (unofficial package)                  |
 | `deadbranch`       | CLI tool for safely cleaning up stale git branches                                       |
+| `ds4`              | DeepSeek V4 Flash local inference engine (Metal, aarch64-darwin only)                    |
 | `freecad-weekly`   | FreeCAD pre-release builds (RC and weekly), wrapped from the official AppImage            |
 | `godot-dev`        | Godot game engine development/beta/RC builds (pre-built binary)                          |
 | `godot-dev-mono`   | Godot game engine development/beta/RC builds with C#/.NET support (pre-built binary)     |
@@ -106,6 +107,21 @@ nix run .#update-deadbranch
 This uses `nix-update` under the hood. It queries the deadbranch GitHub releases API,
 finds the newest `v*` tag, and rewrites the `version` and `hash` fields in
 `pkgs/deadbranch/default.nix` automatically.
+
+**ds4** tracks the latest commit on `main` branch from the [ds4 GitHub repository](https://github.com/antirez/ds4).
+
+Builds five Metal-backed binaries (ds4, ds4-server, ds4-agent, ds4-bench, ds4-eval) for aarch64-darwin from the upstream ds4 repository.  The project has no releases yet, so the pinned commit serves as the version.
+
+A compat header bridges the gap between nixpkgs' macOS SDK 14.4 and the macOS 15.0 Metal APIs used by ds4 (MTLResidencySetDescriptor, MTLMathModeSafe, missing protocol selectors). Metal shader source files are shipped in $out/share/ds4/metal/ with wrapper scripts that set the working directory so the engine finds them at runtime.
+
+To update to the latest commit:
+
+```
+nix run .#update-ds4
+```
+
+This queries the GitHub branches API, determines the current HEAD SHA and date,
+prefetches the source tarball hash, and rewrites `pkgs/ds4/default.nix`.
 
 **godot-dev** and **godot-dev-mono** track pre-release builds from the
 [godot-builds](https://github.com/godotengine/godot-builds) GitHub repository.

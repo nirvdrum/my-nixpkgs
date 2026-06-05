@@ -32,6 +32,7 @@
         textgen-rocm = pkgs.callPackage ./pkgs/textgen { variant = "rocm"; };
       }
       // nixpkgs.lib.optionalAttrs (system == "aarch64-darwin") {
+        ds4 = pkgs.callPackage ./pkgs/ds4 { };
         vibe = pkgs.callPackage ./pkgs/vibe { };
       }
       // {
@@ -662,6 +663,81 @@
           print(f"Updated {DERIVATION} from {current} to {latest}.")
           print("Stage the change with: git add pkgs/vibe/default.nix")
         '';
+
+        # Queries the ds4 GitHub repository for the latest commit on main,
+        # prefetches the source hash, and rewrites the derivation with the
+        # new rev (full SHA) and version date. No releases exist yet, so we
+        # track HEAD of main. Must be run from the root of the flake checkout.
+        updateDs4Script = pkgs.writeText "update-ds4.py" ''
+          import json
+          import re
+          import subprocess
+          import sys
+          import os
+          import urllib.request
+
+          DERIVATION = "pkgs/ds4/default.nix"
+          BRANCH_API = "https://api.github.com/repos/antirez/ds4/branches/main"
+
+          if not os.path.exists(DERIVATION):
+              print("error: run this script from the root of the flake", file=sys.stderr)
+              sys.exit(1)
+
+          print("Fetching ds4 latest commit...")
+          request = urllib.request.Request(
+              BRANCH_API,
+              headers={"Accept": "application/vnd.github+json", "User-Agent": "nix-update-ds4"},
+          )
+          with urllib.request.urlopen(request) as response:
+              branch = json.load(response)
+
+          latest_sha = branch["commit"]["sha"]
+          latest_date = branch["commit"]["commit"]["committer"]["date"][:10]
+          latest_version = f"unstable-{latest_date}"
+
+          with open(DERIVATION) as f:
+              content = f.read()
+
+          current_rev = re.search(r'rev = "([^"]+)"', content).group(1)
+          current_version = re.search(r'version = "([^"]+)"', content).group(1)
+          print(f"Current: {current_version} ({current_rev[:7]})")
+          print(f"Latest:  {latest_version} ({latest_sha[:7]})")
+
+          if current_rev == latest_sha:
+              print("Already up to date.")
+              sys.exit(0)
+
+          # Prefetch hash using nix-prefetch-github.
+          # nix-prefetch-url / prefetch-file won't work for GitHub tarballs
+          # that need authentication or are private, so we use
+          # nix-prefetch-github or nix store prefetch-file with the archive URL.
+          archive_url = f"https://github.com/antirez/ds4/archive/{latest_sha}.tar.gz"
+          print("Prefetching source hash...")
+          result = subprocess.run(
+              ["nix", "store", "prefetch-file", archive_url],
+              capture_output=True, text=True
+          )
+          hash_match = re.search(r"hash '([^']+)'", result.stdout + result.stderr)
+          if not hash_match:
+              print(f"error: could not fetch hash for {archive_url}", file=sys.stderr)
+              sys.exit(1)
+
+          new_hash = hash_match.group(1)
+
+          content = content.replace(f'version = "{current_version}"', f'version = "{latest_version}"', 1)
+          content = content.replace(f'rev = "{current_rev}"', f'rev = "{latest_sha}"', 1)
+          content = re.sub(
+              r'(hash = ")[^"]+(")',
+              lambda m: m.group(1) + new_hash + m.group(2),
+              content
+          )
+
+          with open(DERIVATION, "w") as f:
+              f.write(content)
+
+          print(f"Updated {DERIVATION} from {current_version} to {latest_version}.")
+          print("Stage the change with: git add pkgs/ds4/default.nix")
+        '';
       in
       {
         update-claude-desktop = {
@@ -675,6 +751,13 @@
           type = "app";
           program = toString (pkgs.writeShellScript "update-deadbranch" ''
             exec ${pkgs.nix-update}/bin/nix-update --flake deadbranch --version-regex 'v(.*)'
+          '');
+        };
+
+        update-ds4 = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "update-ds4" ''
+            exec ${pkgs.python3}/bin/python3 ${updateDs4Script}
           '');
         };
 
@@ -708,6 +791,7 @@
           '');
         };
 
+
         update-vibe = {
           type = "app";
           program = toString (pkgs.writeShellScript "update-vibe" ''
@@ -727,7 +811,7 @@
           program = toString (pkgs.writeShellScript "update-all" ''
             failed=""
 
-            for app in update-claude-desktop update-deadbranch update-freecad-weekly update-godot-dev update-msty-studio update-textgen update-vibe update-whispering; do
+            for app in update-claude-desktop update-deadbranch update-ds4 update-freecad-weekly update-godot-dev update-msty-studio update-textgen update-vibe update-whispering; do
               echo "=== Running $app ==="
               if nix run .#"$app"; then
                 echo "=== $app completed successfully ==="
