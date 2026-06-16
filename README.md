@@ -9,6 +9,7 @@ A personal Nix flake containing packages not yet available in nixpkgs. The goal 
 | `claude-desktop`   | Anthropic's Claude AI desktop application for Linux (unofficial package)                  |
 | `deadbranch`       | CLI tool for safely cleaning up stale git branches                                       |
 | `fastmail`         | CLI for Fastmail email, calendars, events, and todos via JMAP and CalDAV                 |
+| `fastmail-cli`     | Command-line interface for Fastmail using JMAP (binary: `fm`)                            |
 | `ds4`              | DeepSeek V4 Flash local inference engine (Metal, aarch64-darwin only)                    |
 | `freecad-weekly`   | FreeCAD pre-release builds (RC and weekly), wrapped from the official AppImage            |
 | `godot-dev`        | Godot game engine development/beta/RC builds (pre-built binary)                          |
@@ -108,6 +109,20 @@ nix run .#update-fastmail
 This uses `nix-update` under the hood. It queries the GitHub releases API,
 finds the newest tag, and rewrites the `version`, `src.hash`, and `vendorHash` fields in
 `pkgs/fastmail/default.nix` automatically.
+
+**fastmail-cli** tracks GitHub release tags from the [vicyap/fastmail-cli repository](https://github.com/vicyap/fastmail-cli).
+To update to the latest release:
+
+```
+nix run .#update-fastmail-cli
+```
+
+This uses `nix-update` under the hood. It queries the GitHub releases API,
+finds the newest `v*` tag, and rewrites the `version`, `src.hash`, and `vendorHash` fields
+in `pkgs/fastmail-cli/default.nix` automatically.
+
+The derivation also installs shell completions (bash, zsh, fish), man pages, and agent skills
+(`.agents/skills/fastmail/`) to `$out/share/fastmail-cli/`.
 
 **deadbranch** tracks GitHub release tags from the [deadbranch repository](https://github.com/armgabrielyan/deadbranch).
 To update to the latest release:

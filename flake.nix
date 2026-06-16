@@ -20,6 +20,7 @@
       in {
         deadbranch = pkgs.callPackage ./pkgs/deadbranch { };
         fastmail = pkgs.callPackage ./pkgs/fastmail { };
+        fastmail-cli = pkgs.callPackage ./pkgs/fastmail-cli { };
         freecad-weekly = pkgs.callPackage ./pkgs/freecad-weekly { };
         godot-dev = pkgs.callPackage ./pkgs/godot-dev { };
         godot-dev-mono = pkgs.callPackage ./pkgs/godot-dev { withMono = true; };
@@ -769,6 +770,13 @@
           '');
         };
 
+        update-fastmail-cli = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "update-fastmail-cli" ''
+            exec ${pkgs.nix-update}/bin/nix-update --flake fastmail-cli --version-regex 'v(.*)'
+          '');
+        };
+
         update-ds4 = {
           type = "app";
           program = toString (pkgs.writeShellScript "update-ds4" ''
@@ -826,7 +834,7 @@
           program = toString (pkgs.writeShellScript "update-all" ''
             failed=""
 
-            for app in update-claude-desktop update-deadbranch update-ds4 update-fastmail update-freecad-weekly update-godot-dev update-msty-studio update-textgen update-vibe update-whispering; do
+            for app in update-claude-desktop update-deadbranch update-ds4 update-fastmail update-fastmail-cli update-freecad-weekly update-godot-dev update-msty-studio update-textgen update-vibe update-whispering; do
               echo "=== Running $app ==="
               if nix run .#"$app"; then
                 echo "=== $app completed successfully ==="
