@@ -8,7 +8,7 @@
 
 let
   pname = "freecad-weekly";
-  version = "2026.05.20";
+  version = "2026.07.09";
   tag = "weekly-${version}";
 in
 
@@ -16,7 +16,7 @@ if stdenvNoCC.hostPlatform.isLinux then
   let
     src = fetchurl {
       url = "https://github.com/FreeCAD/FreeCAD/releases/download/${tag}/FreeCAD_${tag}-Linux-x86_64.AppImage";
-      hash = "sha256-jqZCdztsN1Psf3+gyXXb9C6M6Znue1l3TC3YAMpuweA=";
+      hash = "sha256-RWhSY3P70m4PTYfCKFe96Vbd/R5Cnud/rudDAAyD8iY=";
     };
 
     appimageContents = appimageTools.extractType2 { inherit pname version src; };
