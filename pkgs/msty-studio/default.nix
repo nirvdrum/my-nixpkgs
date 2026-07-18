@@ -24,7 +24,7 @@ if stdenvNoCC.hostPlatform.isLinux then
     inherit pname version src;
 
     extraInstallCommands = ''
-      install -Dm444 ${appimageContents}/MstyStudio.desktop \
+      install -Dm444 ${appimageContents}/mstystudio.desktop \
         $out/share/applications/msty-studio.desktop
       substituteInPlace $out/share/applications/msty-studio.desktop \
         --replace-fail 'Exec=AppRun' 'Exec=msty-studio'
