@@ -14,7 +14,7 @@ in
 if stdenvNoCC.hostPlatform.isLinux then
   let
     src = fetchurl {
-      url = "https://next-assets.msty.studio/app/latest/linux/MstyStudio_x86_64.AppImage";
+      url = "https://next-assets.msty.studio/app/releases/${version}/linux/MstyStudio_x86_64.AppImage";
       hash = "sha256-ed9yvdF06siJeuMfWBloZGn6/dy94rt0HiDGG9mGpOI=";
     };
 
@@ -45,8 +45,7 @@ else
     inherit pname version;
 
     src = fetchurl {
-      url = "https://next-assets.msty.studio/app/latest/mac/MstyStudio_arm64.dmg?ver=${version}";
-      name = "MstyStudio_arm64.dmg";
+      url = "https://next-assets.msty.studio/app/releases/${version}/mac/MstyStudio_arm64.dmg";
       hash = "sha256-8EOwhGsSC1/whrQgdXpfp3Hv3FmNEztUihax7OvK6EA=";
     };
 
