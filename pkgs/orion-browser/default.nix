@@ -36,15 +36,13 @@
   gsettings-desktop-schemas,
 }:
 
-stdenv.mkDerivation {
+stdenv.mkDerivation (rec {
   pname = "orion-browser";
 
-  # The upstream Flatpak bundle uses a rolling "latest" URL with no
-  # formal version, so we pin a date and set the hash to match.
-  version = "0-unstable-2026-05-16";
+  version = "0.3.0";
 
   src = fetchurl {
-    url = "https://orionbrowser.com/download/latest.flatpak";
+    url = "https://orionbrowser.com/download/oriongtk.${version}.flatpak";
     hash = "sha256-0NOWPS2Yv5NpnTxqsiMvshHFyTyDotPi964/2og/bCw=";
   };
 
@@ -173,4 +171,4 @@ WRAPPER
     platforms = [ "x86_64-linux" ];
     mainProgram = "oriongtk";
   };
-}
+})
