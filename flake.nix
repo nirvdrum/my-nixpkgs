@@ -3,9 +3,10 @@
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
+    nixpkgs-stable.url = "github:nixos/nixpkgs?ref=nixos-26.05";
   };
 
-  outputs = { self, nixpkgs }:
+  outputs = { self, nixpkgs, nixpkgs-stable }:
   let
     supportedSystems = [ "x86_64-linux" "aarch64-darwin" ];
     forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
@@ -22,7 +23,13 @@
         godot-dev = pkgs.callPackage ./pkgs/godot-dev { };
         godot-dev-mono = pkgs.callPackage ./pkgs/godot-dev { withMono = true; };
         msty-studio = pkgs.callPackage ./pkgs/msty-studio { };
-        orion-browser = pkgs.callPackage ./pkgs/orion-browser { };
+        orion-browser = pkgs.callPackage ./pkgs/orion-browser {
+          # The bundled WebKitGTK was compiled against libjxl 0.11
+          # (SONAME libjxl.so.0.11), but nixpkgs unstable ships 0.12.
+          # Pull the 0.11.x library from the stable branch, which is
+          # cached on Hydra and requires no source build.
+          libjxl = nixpkgs-stable.legacyPackages.${system}.libjxl;
+        };
         textgen = pkgs.callPackage ./pkgs/textgen { };
         whispering = pkgs.callPackage ./pkgs/whispering { };
       }

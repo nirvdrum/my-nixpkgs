@@ -34,6 +34,7 @@
   dbus,
   glib-networking,
   gsettings-desktop-schemas,
+  libjxl,
 }:
 
 stdenv.mkDerivation (rec {
@@ -80,6 +81,7 @@ stdenv.mkDerivation (rec {
     dbus
     glib-networking
     gsettings-desktop-schemas
+    libjxl
 
     gst_all_1.gstreamer
     gst_all_1.gst-plugins-base
