@@ -10,6 +10,7 @@ A personal Nix flake containing packages not yet available in nixpkgs. The goal 
 | `deadbranch`       | CLI tool for safely cleaning up stale git branches                                       |
 | `fastmail`         | CLI for Fastmail email, calendars, events, and todos via JMAP and CalDAV                 |
 | `fastmail-cli`     | Command-line interface for Fastmail using JMAP (binary: `fm`)                            |
+| `fastmail-rules-cli` | CLI for managing Fastmail mail rules and Sieve scripts via JMAP (binary: `fastmail-sieve`) |
 | `ds4`              | DeepSeek V4 Flash local inference engine (Metal, aarch64-darwin only)                    |
 | `freecad-weekly`   | FreeCAD pre-release builds (RC and weekly), wrapped from the official AppImage            |
 | `godot-dev`        | Godot game engine development/beta/RC builds (pre-built binary)                          |
@@ -123,6 +124,18 @@ in `pkgs/fastmail-cli/default.nix` automatically.
 
 The derivation also installs shell completions (bash, zsh, fish), man pages, and agent skills
 (`.agents/skills/fastmail/`) to `$out/share/fastmail-cli/`.
+
+**fastmail-rules-cli** tracks the latest commit on `main` from the
+[dvcrn/fastmail-rules-cli repository](https://github.com/dvcrn/fastmail-rules-cli).
+The project has no releases yet, so the pinned commit serves as the version.
+To update to the latest commit:
+
+```
+nix run .#update-fastmail-rules-cli
+```
+
+This queries the GitHub branches API, determines the current HEAD SHA and date,
+prefetches source and vendor hashes, and rewrites `pkgs/fastmail-rules-cli/default.nix`.
 
 **deadbranch** tracks GitHub release tags from the [deadbranch repository](https://github.com/armgabrielyan/deadbranch).
 To update to the latest release:

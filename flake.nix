@@ -21,6 +21,7 @@
         deadbranch = pkgs.callPackage ./pkgs/deadbranch { };
         fastmail = pkgs.callPackage ./pkgs/fastmail { };
         fastmail-cli = pkgs.callPackage ./pkgs/fastmail-cli { };
+        fastmail-rules-cli = pkgs.callPackage ./pkgs/fastmail-rules-cli { };
         freecad-weekly = pkgs.callPackage ./pkgs/freecad-weekly { };
         godot-dev = pkgs.callPackage ./pkgs/godot-dev { };
         godot-dev-mono = pkgs.callPackage ./pkgs/godot-dev { withMono = true; };
@@ -590,6 +591,143 @@
           print("Stage the change with: git add pkgs/textgen/default.nix")
         '';
 
+        # Queries the fastmail-rules-cli main branch for the latest commit,
+        # prefetches the source and vendor hashes, and rewrites the derivation.
+        # No releases exist yet, so we track HEAD of main. Must be run from
+        # the root of the flake checkout.
+        updateFastmailRulesCliScript = pkgs.writeText "update-fastmail-rules-cli.py" ''
+          import json
+          import re
+          import subprocess
+          import sys
+          import os
+          import urllib.request
+
+          DERIVATION = "pkgs/fastmail-rules-cli/default.nix"
+          BRANCH_API = "https://api.github.com/repos/dvcrn/fastmail-rules-cli/branches/main"
+
+          if not os.path.exists(DERIVATION):
+              print("error: run this script from the root of the flake", file=sys.stderr)
+              sys.exit(1)
+
+          print("Fetching fastmail-rules-cli latest commit...")
+          request = urllib.request.Request(
+              BRANCH_API,
+              headers={"Accept": "application/vnd.github+json", "User-Agent": "nix-update-fastmail-rules-cli"},
+          )
+          with urllib.request.urlopen(request) as response:
+              branch = json.load(response)
+
+          latest_sha = branch["commit"]["sha"]
+          latest_date = branch["commit"]["commit"]["committer"]["date"][:10]
+          latest_version = f"unstable-{latest_date}"
+
+          with open(DERIVATION) as f:
+              content = f.read()
+
+          current_rev = re.search(r'rev = "([^"]+)"', content).group(1)
+          current_version = re.search(r'version = "([^"]+)"', content).group(1)
+          print(f"Current: {current_version} ({current_rev[:7]})")
+          print(f"Latest:  {latest_version} ({latest_sha[:7]})")
+
+          if current_rev == latest_sha:
+              print("Already up to date.")
+              sys.exit(0)
+
+          print("Updating derivation...")
+          content = content.replace(f'version = "{current_version}"', f'version = "{latest_version}"', 1)
+          content = content.replace(f'rev = "{current_rev}"', f'rev = "{latest_sha}"', 1)
+
+          # Clear both hashes so nix build will recompute them.
+          # Source hash is inside the fetchFromGitHub block (4-space indent).
+          content = re.sub(
+              r'(\s{4}hash = ")[^"]+(";)',
+              r'\1\2',
+              content
+          )
+          # vendorHash is at the top level (2-space indent).
+          content = re.sub(
+              r'(  vendorHash = ")[^"]+(";)',
+              r'\1\2',
+              content
+          )
+
+          with open(DERIVATION, "w") as f:
+              f.write(content)
+
+          # Stage the change so Nix can see the updated file.
+          subprocess.run(["git", "add", DERIVATION], check=True)
+
+          print(f"Building to obtain new hashes...")
+          result = subprocess.run(
+              ["nix", "build", ".#fastmail-rules-cli"],
+              capture_output=True, text=True
+          )
+
+          # nix build will fail with the correct hashes in stderr.
+          combined = result.stdout + result.stderr
+
+          src_hash_match = re.search(r"got:\s+(sha256-[A-Za-z0-9+/=]+)", combined)
+          vendor_hash_match = re.search(r"got:\s+(sha256-[A-Za-z0-9+/=]+)", combined[combined.find("vendor"):] if "vendor" in combined else combined)
+
+          if not src_hash_match:
+              print("error: could not determine new source hash", file=sys.stderr)
+              print(combined, file=sys.stderr)
+              sys.exit(1)
+
+          new_src_hash = src_hash_match.group(1)
+
+          # Reread the derivation (it may have been rebuilt).
+          with open(DERIVATION) as f:
+              content = f.read()
+
+          # Insert source hash into the first empty hash = ""
+          content = content.replace('hash = ""', f'hash = "{new_src_hash}"', 1)
+
+          # Rebuild to get vendorHash now that source hash is correct.
+          with open(DERIVATION, "w") as f:
+              f.write(content)
+          subprocess.run(["git", "add", DERIVATION], check=True)
+
+          print(f"Building to obtain vendor hash...")
+          result = subprocess.run(
+              ["nix", "build", ".#fastmail-rules-cli"],
+              capture_output=True, text=True
+          )
+          combined = result.stdout + result.stderr
+
+          if result.returncode == 0:
+              print("Build succeeded — vendor hash already resolved.")
+          else:
+              vendor_match = re.search(r"got:\s+(sha256-[A-Za-z0-9+/=]+)", combined)
+              if vendor_match:
+                  new_vendor_hash = vendor_match.group(1)
+                  with open(DERIVATION) as f:
+                      content = f.read()
+                  content = content.replace('vendorHash = ""', f'vendorHash = "{new_vendor_hash}"')
+                  with open(DERIVATION, "w") as f:
+                      f.write(content)
+                  subprocess.run(["git", "add", DERIVATION], check=True)
+
+                  # Final build to confirm.
+                  print("Running final build to confirm...")
+                  result = subprocess.run(
+                      ["nix", "build", ".#fastmail-rules-cli"],
+                      capture_output=True, text=True
+                  )
+                  if result.returncode != 0:
+                      print("error: final build failed", file=sys.stderr)
+                      print(result.stdout + result.stderr, file=sys.stderr)
+                      sys.exit(1)
+              else:
+                  print("error: could not determine vendor hash", file=sys.stderr)
+                  print(combined, file=sys.stderr)
+                  sys.exit(1)
+
+          print(f"Updated {DERIVATION} from {current_version} to {latest_version}.")
+          print("Stage the change with: git add pkgs/fastmail-rules-cli/default.nix")
+        '';
+
         # Finds the newest date+SHA release tag (excluding the rolling "latest"
         # tag), fetches a fresh hash for the macOS ARM64 zip, and rewrites the
         # derivation. Must be run from the root of the flake checkout.
@@ -784,6 +922,13 @@
           '');
         };
 
+        update-fastmail-rules-cli = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "update-fastmail-rules-cli" ''
+            exec ${pkgs.python3}/bin/python3 ${updateFastmailRulesCliScript}
+          '');
+        };
+
         update-freecad-weekly = {
           type = "app";
           # Filters to weekly-YYYY.MM.DD tags only, so a stable 1.x release
@@ -834,7 +979,7 @@
           program = toString (pkgs.writeShellScript "update-all" ''
             failed=""
 
-            for app in update-claude-desktop update-deadbranch update-ds4 update-fastmail update-fastmail-cli update-freecad-weekly update-godot-dev update-msty-studio update-textgen update-vibe update-whispering; do
+            for app in update-claude-desktop update-deadbranch update-ds4 update-fastmail update-fastmail-cli update-fastmail-rules-cli update-freecad-weekly update-godot-dev update-msty-studio update-textgen update-vibe update-whispering; do
               echo "=== Running $app ==="
               if nix run .#"$app"; then
                 echo "=== $app completed successfully ==="
