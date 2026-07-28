@@ -1,4 +1,4 @@
-{ lib, buildGoModule, fetchFromGitHub }:
+{ lib, buildGoModule, fetchFromGitHub, installShellFiles }:
 
 buildGoModule rec {
   pname = "fastmail";
@@ -17,11 +17,20 @@ buildGoModule rec {
     "-X github.com/shareup/fastmail/internal/version.Version=${version}"
   ];
 
+  nativeBuildInputs = [ installShellFiles ];
+
   # The integration tests require a running fakemail server and network access.
   # Unit tests pass without external dependencies but call os.Exit(0) in the
   # cobra command runner (TestMain hardcodes the expected exit code), so we
   # skip them entirely to avoid false negatives.
   doCheck = false;
+
+  postInstall = ''
+    $out/bin/fastmail completion bash > fastmail.bash
+    $out/bin/fastmail completion zsh > _fastmail
+    $out/bin/fastmail completion fish > fastmail.fish
+    installShellCompletion --bash fastmail.bash --zsh _fastmail --fish fastmail.fish
+  '';
 
   meta = with lib; {
     description = "CLI for Fastmail email, calendars, events, and todos via JMAP and CalDAV";

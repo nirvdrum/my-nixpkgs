@@ -1,4 +1,4 @@
-{ lib, buildGoModule, fetchFromGitHub }:
+{ lib, buildGoModule, fetchFromGitHub, installShellFiles }:
 
 buildGoModule rec {
   pname = "fastmail-sieve";
@@ -12,6 +12,15 @@ buildGoModule rec {
   };
 
   vendorHash = "sha256-7K17JaXFsjf163g5PXCb5ng2gYdotnZ2IDKk8KFjNj0=";
+
+  nativeBuildInputs = [ installShellFiles ];
+
+  postInstall = ''
+    $out/bin/fastmail-sieve completion bash > fastmail-sieve.bash
+    $out/bin/fastmail-sieve completion zsh > _fastmail-sieve
+    $out/bin/fastmail-sieve completion fish > fastmail-sieve.fish
+    installShellCompletion --bash fastmail-sieve.bash --zsh _fastmail-sieve --fish fastmail-sieve.fish
+  '';
 
   meta = with lib; {
     description = "CLI for managing Fastmail mail rules and Sieve scripts through Fastmail's JMAP endpoints";
