@@ -6,6 +6,7 @@ A personal Nix flake containing packages not yet available in nixpkgs. The goal 
 
 | Name               | Description                                                                              |
 |--------------------|------------------------------------------------------------------------------------------|
+| `actual-cli`       | Command-line interface for Actual Budget (binary: `actual`)                              |
 | `deadbranch`       | CLI tool for safely cleaning up stale git branches                                       |
 | `fastmail`         | CLI for Fastmail email, calendars, events, and todos via JMAP and CalDAV                 |
 | `fastmail-cli`     | Command-line interface for Fastmail using JMAP (binary: `fm`)                            |
@@ -67,6 +68,21 @@ environment.systemPackages = [
 ### Update a package to its latest release
 
 Each package that tracks a moving upstream target has a corresponding update app.
+
+**actual-cli** tracks the latest stable version of `@actual-app/cli` published to the
+[npm registry](https://www.npmjs.com/package/@actual-app/cli). Because the published
+tarball ships a bundled build output and no lockfile, the updater regenerates a
+production `package-lock.json`, then prefetches the source and `npmDepsHash` values
+and rewrites both `pkgs/actual-cli/default.nix` and `pkgs/actual-cli/package-lock.json`.
+Run the following from the repo root:
+
+```
+nix run .#update-actual-cli
+```
+
+This installs dependencies into a throwaway directory using the same `nodejs_22` npm
+that the build uses, so the regenerated lockfile matches what `fetchNpmDeps` resolves
+at build time and future updates stay minimal diffs.
 
 **freecad-weekly** tracks FreeCAD `weekly-YYYY.MM.DD` release tags. To update to the
 latest weekly build, run the following from the repo root:

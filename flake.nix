@@ -18,6 +18,7 @@
         config.allowUnfree = true;
       };
       in {
+        actual-cli = pkgs.callPackage ./pkgs/actual-cli { };
         deadbranch = pkgs.callPackage ./pkgs/deadbranch { };
         fastmail = pkgs.callPackage ./pkgs/fastmail { };
         fastmail-cli = pkgs.callPackage ./pkgs/fastmail-cli { };
@@ -51,6 +52,135 @@
     apps = forAllSystems (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
+
+        # Queries the npm registry for the latest stable @actual-app/cli
+        # release, regenerates the vendored production package-lock.json (the
+        # published tarball ships none), prefetches the source and npm-deps
+        # hashes, and rewrites the derivation. Must be run from the root of
+        # the flake checkout.
+        updateActualCliScript = pkgs.writeText "update-actual-cli.py" ''
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+          import tarfile
+          import tempfile
+          import urllib.request
+
+          if len(sys.argv) != 6:
+              print("usage: update-actual-cli.py <derivation> <lockfile> <npm> <prefetch-npm-deps> <nix>", file=sys.stderr)
+              sys.exit(1)
+
+          derivation = sys.argv[1]
+          lockfile = sys.argv[2]
+          npm = sys.argv[3]
+          prefetch_npm_deps = sys.argv[4]
+          nix = sys.argv[5]
+
+          registry = "https://registry.npmjs.org/@actual-app/cli"
+
+          if not os.path.exists(derivation):
+              print("error: run this script from the root of the flake", file=sys.stderr)
+              sys.exit(1)
+
+          print("Fetching @actual-app/cli dist-tags...")
+          request = urllib.request.Request(
+              registry,
+              headers={"User-Agent": "nix-update-actual-cli/1.0"},
+          )
+          with urllib.request.urlopen(request) as response:
+              meta = json.load(response)
+
+          latest = meta["dist-tags"]["latest"]
+
+          with open(derivation) as f:
+              content = f.read()
+
+          current = re.search(r'version = "([^"]+)"', content).group(1)
+          print(f"Current: {current}  Latest: {latest}")
+
+          if current == latest:
+              print("Already up to date.")
+              sys.exit(0)
+
+          tarball_url = f"https://registry.npmjs.org/@actual-app/cli/-/cli-{latest}.tgz"
+
+          def nix_prefetch_file(url):
+              result = subprocess.run(
+                  [nix, "store", "prefetch-file", "--json", url],
+                  capture_output=True, text=True,
+              )
+              if result.returncode == 0:
+                  data = json.loads(result.stdout)
+                  h = data.get("hash")
+                  if h:
+                      return h
+              # Fall back to the human-readable output of older Nix versions.
+              result = subprocess.run(
+                  [nix, "store", "prefetch-file", url],
+                  capture_output=True, text=True,
+              )
+              m = re.search(r"hash '([^']+)'", result.stdout + result.stderr)
+              if not m:
+                  print(f"error: could not fetch hash for {url}", file=sys.stderr)
+                  print(result.stdout + result.stderr, file=sys.stderr)
+                  sys.exit(1)
+              return m.group(1)
+
+          print("Prefetching source tarball hash...")
+          src_hash = nix_prefetch_file(tarball_url)
+
+          print("Regenerating production package-lock.json...")
+          with tempfile.TemporaryDirectory() as tmp:
+              tarball_path = os.path.join(tmp, "cli.tgz")
+              with urllib.request.urlopen(tarball_url) as response, open(tarball_path, "wb") as out:
+                  out.write(response.read())
+
+              with tarfile.open(tarball_path, "r:gz") as tar:
+                  tar.extractall(tmp)
+
+              src_dir = os.path.join(tmp, "package")
+              subprocess.run(
+                  [npm, "install", "--package-lock-only", "--omit=dev", "--no-audit", "--no-fund"],
+                  cwd=src_dir, check=True,
+                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+              )
+
+              with open(os.path.join(src_dir, "package-lock.json"), "rb") as src, open(lockfile, "wb") as dst:
+                  dst.write(src.read())
+
+          print("Prefetching npm deps hash...")
+          result = subprocess.run(
+              [prefetch_npm_deps, lockfile],
+              capture_output=True, text=True,
+          )
+          npm_deps_hash = result.stdout.strip().splitlines()[-1].strip() if result.stdout.strip() else ""
+          if not npm_deps_hash.startswith("sha256-"):
+              print("error: could not determine npm deps hash", file=sys.stderr)
+              print(result.stdout + result.stderr, file=sys.stderr)
+              sys.exit(1)
+
+          content = content.replace(f'version = "{current}"', f'version = "{latest}"', 1)
+          content = re.sub(
+              r'(cli-\$\{version\}\.tgz";\n\s+hash = ")[^"]+(";)',
+              lambda m: m.group(1) + src_hash + m.group(2),
+              content,
+          )
+          content = re.sub(
+              r'(npmDepsHash = ")[^"]+(";)',
+              lambda m: m.group(1) + npm_deps_hash + m.group(2),
+              content,
+          )
+
+          with open(derivation, "w") as f:
+              f.write(content)
+
+          subprocess.run(["git", "add", derivation, lockfile], check=True)
+
+          print(f"Updated {derivation} from {current} to {latest}.")
+          print("Stage the change with: git add pkgs/actual-cli/default.nix pkgs/actual-cli/package-lock.json")
+        '';
 
         # Queries the Msty changelog for the latest version, fetches fresh hashes
         # for both the Linux AppImage and macOS DMG, and rewrites the derivation.
@@ -795,6 +925,18 @@
         '';
       in
       {
+        update-actual-cli = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "update-actual-cli" ''
+            exec ${pkgs.python3}/bin/python3 ${updateActualCliScript} \
+              pkgs/actual-cli/default.nix \
+              pkgs/actual-cli/package-lock.json \
+              ${pkgs.nodejs_22}/bin/npm \
+              ${pkgs.prefetch-npm-deps}/bin/prefetch-npm-deps \
+              ${pkgs.nix}/bin/nix
+          '');
+        };
+
         update-deadbranch = {
           type = "app";
           program = toString (pkgs.writeShellScript "update-deadbranch" ''
@@ -880,7 +1022,7 @@
           program = toString (pkgs.writeShellScript "update-all" ''
             failed=""
 
-            for app in update-deadbranch update-ds4 update-fastmail update-fastmail-cli update-fastmail-rules-cli update-freecad-weekly update-godot-dev update-msty-studio update-textgen update-vibe update-whispering; do
+            for app in update-actual-cli update-deadbranch update-ds4 update-fastmail update-fastmail-cli update-fastmail-rules-cli update-freecad-weekly update-godot-dev update-msty-studio update-textgen update-vibe update-whispering; do
               echo "=== Running $app ==="
               if nix run .#"$app"; then
                 echo "=== $app completed successfully ==="
