@@ -1,55 +1,122 @@
 {
   lib,
   stdenv,
-  fetchurl,
-  flatpak,
+  stdenvNoCC,
+  cacert,
   ostree,
   autoPatchelfHook,
   wrapGAppsHook4,
   bubblewrap,
   gtk4,
   libadwaita,
-  webkitgtk_6_0,
   glib,
   gst_all_1,
   libsoup_3,
-  json-glib,
   libsecret,
-  sqlite,
   icu77,
   libxml2,
-  harfbuzz,
+  libxslt,
+  harfbuzzFull,
   fontconfig,
   freetype,
   cairo,
   pango,
   gdk-pixbuf,
-  librsvg,
+  graphene,
+  libepoxy,
   woff2,
-  mesa,
+  libavif,
+  libwebp,
+  libjpeg,
+  libpng,
+  libjxl,
+  lcms2,
+  hyphen,
+  enchant,
+  libmanette,
+  libseccomp,
+  libtasn1,
+  libgcrypt,
+  libgpg-error,
+  curl,
+  openssl,
+  expat,
+  systemd,
+  libdrm,
+  libgbm,
   libGL,
   vulkan-loader,
   wayland,
-  libxkbcommon,
+  libx11,
   dbus,
   glib-networking,
   gsettings-desktop-schemas,
-  libjxl,
 }:
 
-stdenv.mkDerivation (rec {
+let
+  version = "0.4.1";
+
+  # Kagi no longer publishes a versioned .flatpak bundle for each release; the
+  # only distribution channel is their Flatpak repository, which is a plain
+  # OSTree repository served over HTTP.  Pin the exact commit for this release
+  # so the fetch stays reproducible as the `beta` ref advances.
+  ostreeUrl = "https://flatpak.orionbrowser.com/repo/beta/";
+  ostreeRef = "app/com.kagi.Orion/x86_64/beta";
+  ostreeCommit = "34e7167b0cd363a8061593c7f097b7e611d10752274543af75c8907a67204947";
+
+  src = stdenvNoCC.mkDerivation {
+    pname = "orion-browser-source";
+    inherit version;
+
+    nativeBuildInputs = [ ostree ];
+
+    dontUnpack = true;
+
+    # The checkout must be a byte-for-byte copy of the upstream tree or the
+    # output hash will not be stable.  In particular, the default fixup phase
+    # would rewrite shebangs in the bundled helper scripts to point at the Nix
+    # store, which both changes the hash and leaks a store reference into a
+    # fixed-output derivation.
+    dontFixup = true;
+
+    buildPhase = ''
+      runHook preBuild
+
+      ostree --repo=repo init --mode=archive-z2
+
+      # OSTree fetches over libcurl, which does not consult SSL_CERT_FILE, so
+      # point the remote at the CA bundle explicitly.
+      ostree --repo=repo remote add --no-gpg-verify \
+        --set=tls-ca-path="${cacert}/etc/ssl/certs/ca-bundle.crt" \
+        orion "${ostreeUrl}"
+
+      # Requesting ref@commit pins the pull to this exact revision rather than
+      # whatever the moving `beta` ref currently points at.  The output hash is
+      # what actually guarantees integrity, so GPG verification is redundant.
+      ostree --repo=repo pull --depth=0 orion "${ostreeRef}@${ostreeCommit}"
+
+      runHook postBuild
+    '';
+
+    installPhase = ''
+      runHook preInstall
+
+      ostree --repo=repo checkout --user-mode "${ostreeCommit}" "$out"
+
+      runHook postInstall
+    '';
+
+    outputHashMode = "recursive";
+    outputHashAlgo = "sha256";
+    outputHash = "sha256-vTlbxDwR0QCSXG030h1TJJU77l/KrDvcKOSBDYeq4EY=";
+  };
+in
+stdenv.mkDerivation {
   pname = "orion-browser";
 
-  version = "0.3.0";
-
-  src = fetchurl {
-    url = "https://orionbrowser.com/download/oriongtk.${version}.flatpak";
-    hash = "sha256-0NOWPS2Yv5NpnTxqsiMvshHFyTyDotPi964/2og/bCw=";
-  };
+  inherit version src;
 
   nativeBuildInputs = [
-    flatpak
-    ostree
     autoPatchelfHook
     wrapGAppsHook4
   ];
@@ -57,31 +124,47 @@ stdenv.mkDerivation (rec {
   buildInputs = [
     gtk4
     libadwaita
-    webkitgtk_6_0
     glib
     libsoup_3
-    json-glib
     libsecret
-    sqlite
     icu77
     libxml2
-    harfbuzz
+    libxslt
+    harfbuzzFull
     fontconfig
     freetype
     cairo
     pango
     gdk-pixbuf
-    librsvg
+    graphene
+    libepoxy
     woff2
-    mesa
+    libavif
+    libwebp
+    libjpeg
+    libpng
+    libjxl
+    lcms2
+    hyphen
+    enchant
+    libmanette
+    libseccomp
+    libtasn1
+    libgcrypt
+    libgpg-error
+    curl
+    openssl
+    expat
+    systemd
+    libdrm
+    libgbm
     libGL
     vulkan-loader
     wayland
-    libxkbcommon
+    libx11
     dbus
     glib-networking
     gsettings-desktop-schemas
-    libjxl
 
     gst_all_1.gstreamer
     gst_all_1.gst-plugins-base
@@ -91,21 +174,6 @@ stdenv.mkDerivation (rec {
 
   dontConfigure = true;
   dontBuild = true;
-
-  unpackPhase = ''
-    runHook preUnpack
-
-    # Extract the Flatpak bundle by importing it into a temporary OSTree
-    # repository and then checking out the application commit.
-    mkdir repo
-    ostree --repo=repo init --mode=bare-user-only
-    flatpak build-import-bundle repo "$src"
-    ostree --repo=repo checkout --user-mode app/com.kagi.OrionGtk/x86_64/master source
-
-    runHook postUnpack
-  '';
-
-  sourceRoot = "source";
 
   installPhase = ''
     runHook preInstall
@@ -120,10 +188,8 @@ stdenv.mkDerivation (rec {
     fi
 
     # Point the desktop file at the wrapped binary in the Nix store.
-    if [ -f "$out/share/applications/com.kagi.OrionGtk.desktop" ]; then
-      substituteInPlace "$out/share/applications/com.kagi.OrionGtk.desktop" \
-        --replace-fail 'Exec=oriongtk' "Exec=$out/bin/oriongtk"
-    fi
+    substituteInPlace "$out/share/applications/com.kagi.Orion.desktop" \
+      --replace-fail 'Exec=oriongtk' "Exec=$out/bin/oriongtk"
 
     runHook postInstall
   '';
@@ -173,4 +239,4 @@ WRAPPER
     platforms = [ "x86_64-linux" ];
     mainProgram = "oriongtk";
   };
-})
+}

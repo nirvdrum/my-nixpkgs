@@ -923,6 +923,166 @@
           print(f"Updated {DERIVATION} from {current_version} to {latest_version}.")
           print("Stage the change with: git add pkgs/ds4/default.nix")
         '';
+
+        # Resolves the commit that Kagi's Flatpak repository currently exposes
+        # for the Orion beta ref, and rewrites the derivation with that commit,
+        # its version, and its output hash.
+        #
+        # Orion has no release feed and no versioned download URL, so the
+        # OSTree repository is the only update source.  Two properties of
+        # OSTree make this cheap: commit metadata can be fetched without any
+        # content, and a partial pull can retrieve just the AppStream metainfo
+        # file that carries the version number.  Both cost a couple of
+        # kilobytes, so the 75 MiB content pull only happens once the commit
+        # has actually moved.
+        #
+        # Must be run from the root of the flake checkout.
+        updateOrionBrowserScript = pkgs.writeText "update-orion-browser.py" ''
+          import os
+          import re
+          import shutil
+          import subprocess
+          import sys
+          import tempfile
+          import xml.etree.ElementTree as ElementTree
+
+          DERIVATION = "pkgs/orion-browser/default.nix"
+          REMOTE_URL = "https://flatpak.orionbrowser.com/repo/beta/"
+          REMOTE_REF = "app/com.kagi.Orion/x86_64/beta"
+          METAINFO_SUBPATH = "/export/share/metainfo"
+          METAINFO_FILE = "com.kagi.Orion.metainfo.xml"
+
+          if len(sys.argv) != 3:
+              print("usage: update-orion-browser.py <ostree> <nix>", file=sys.stderr)
+              sys.exit(1)
+
+          ostree, nix = sys.argv[1], sys.argv[2]
+
+          if not os.path.exists(DERIVATION):
+              print("error: run this script from the root of the flake", file=sys.stderr)
+              sys.exit(1)
+
+          with open(DERIVATION) as f:
+              content = f.read()
+
+          def find(pattern, description):
+              match = re.search(pattern, content)
+              if not match:
+                  print(f"error: could not find {description} in derivation", file=sys.stderr)
+                  sys.exit(1)
+              return match.group(1)
+
+          current_version = find(r'version = "([^"]+)"', "current version")
+          current_commit = find(r'ostreeCommit = "([^"]+)"', "pinned OSTree commit")
+          current_hash = find(r'outputHash = "([^"]+)"', "current output hash")
+
+          workdir = tempfile.mkdtemp(prefix="update-orion-browser.")
+          repo = os.path.join(workdir, "repo")
+
+          def run_ostree(*arguments):
+              result = subprocess.run(
+                  [ostree, f"--repo={repo}"] + list(arguments),
+                  capture_output=True,
+                  text=True,
+              )
+              if result.returncode != 0:
+                  print(f"error: ostree {' '.join(arguments)} failed:", file=sys.stderr)
+                  print(result.stderr, file=sys.stderr)
+                  shutil.rmtree(workdir, ignore_errors=True)
+                  sys.exit(1)
+              return result.stdout
+
+          try:
+              run_ostree("init", "--mode=archive-z2")
+              run_ostree("remote", "add", "--no-gpg-verify", "orion", REMOTE_URL)
+
+              print("Resolving the current commit for the Orion beta ref...")
+              run_ostree("pull", "--commit-metadata-only", "orion", REMOTE_REF)
+              log = run_ostree("log", f"orion:{REMOTE_REF}")
+
+              match = re.search(r"^commit ([0-9a-f]{64})$", log, re.MULTILINE)
+              if not match:
+                  print("error: could not parse commit from ostree log", file=sys.stderr)
+                  sys.exit(1)
+
+              latest_commit = match.group(1)
+
+              print(f"Current: {current_version} ({current_commit[:12]})")
+              print(f"Latest:  {latest_commit[:12]}")
+
+              if latest_commit == current_commit:
+                  print("Already up to date.")
+                  sys.exit(0)
+
+              # The version lives only in the app's own AppStream metainfo file;
+              # the repository's appstream2 ref carries no release versions.
+              print("Fetching version metadata...")
+              run_ostree(
+                  "pull",
+                  f"--subpath={METAINFO_SUBPATH}",
+                  "orion",
+                  f"{REMOTE_REF}@{latest_commit}",
+              )
+
+              metainfo_dir = os.path.join(workdir, "metainfo")
+              run_ostree(
+                  "checkout",
+                  "--user-mode",
+                  f"--subpath={METAINFO_SUBPATH}",
+                  latest_commit,
+                  metainfo_dir,
+              )
+
+              releases = ElementTree.parse(
+                  os.path.join(metainfo_dir, METAINFO_FILE)
+              ).getroot().find("releases")
+
+              if releases is None or releases.find("release") is None:
+                  print("error: no release entry in metainfo", file=sys.stderr)
+                  sys.exit(1)
+
+              latest_version = releases.find("release").get("version")
+              print(f"Latest version: {latest_version}")
+
+              print("Fetching content (this pulls the full application tree)...")
+              run_ostree("pull", "--depth=0", "orion", f"{REMOTE_REF}@{latest_commit}")
+
+              checkout = os.path.join(workdir, "checkout")
+              run_ostree("checkout", "--user-mode", latest_commit, checkout)
+
+              # An `ostree checkout --user-mode` here produces a tree identical
+              # to the one the fixed-output derivation builds, so hashing it
+              # directly avoids a throwaway build to discover the hash.
+              result = subprocess.run(
+                  [nix, "hash", "path", "--sri", "--type", "sha256", checkout],
+                  capture_output=True,
+                  text=True,
+              )
+              if result.returncode != 0:
+                  print("error: could not hash the checkout:", file=sys.stderr)
+                  print(result.stderr, file=sys.stderr)
+                  sys.exit(1)
+
+              new_hash = result.stdout.strip()
+          finally:
+              shutil.rmtree(workdir, ignore_errors=True)
+
+          content = content.replace(
+              f'version = "{current_version}"', f'version = "{latest_version}"', 1
+          )
+          content = content.replace(
+              f'ostreeCommit = "{current_commit}"', f'ostreeCommit = "{latest_commit}"', 1
+          )
+          content = content.replace(
+              f'outputHash = "{current_hash}"', f'outputHash = "{new_hash}"', 1
+          )
+
+          with open(DERIVATION, "w") as f:
+              f.write(content)
+
+          print(f"Updated {DERIVATION} from {current_version} to {latest_version}.")
+          print("Stage the change with: git add pkgs/orion-browser/default.nix")
+        '';
       in
       {
         update-actual-cli = {
@@ -995,6 +1155,15 @@
           '');
         };
 
+        update-orion-browser = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "update-orion-browser" ''
+            exec ${pkgs.python3}/bin/python3 ${updateOrionBrowserScript} \
+              ${pkgs.ostree}/bin/ostree \
+              ${pkgs.nix}/bin/nix
+          '');
+        };
+
         update-textgen = {
           type = "app";
           program = toString (pkgs.writeShellScript "update-textgen" ''
@@ -1022,7 +1191,7 @@
           program = toString (pkgs.writeShellScript "update-all" ''
             failed=""
 
-            for app in update-actual-cli update-deadbranch update-ds4 update-fastmail update-fastmail-cli update-fastmail-rules-cli update-freecad-weekly update-godot-dev update-msty-studio update-textgen update-vibe update-whispering; do
+            for app in update-actual-cli update-deadbranch update-ds4 update-fastmail update-fastmail-cli update-fastmail-rules-cli update-freecad-weekly update-godot-dev update-msty-studio update-orion-browser update-textgen update-vibe update-whispering; do
               echo "=== Running $app ==="
               if nix run .#"$app"; then
                 echo "=== $app completed successfully ==="

@@ -213,15 +213,16 @@ nix run .#update-vibe
 This queries the GitHub releases API, finds the newest date+SHA tag, prefetches the
 macOS ARM64 zip hash, and rewrites `pkgs/vibe/default.nix`.
 
-**orion-browser** tracks the rolling `latest.flatpak` build from
-[orionbrowser.com](https://orionbrowser.com). Since the URL is rolling and has no version tag,
-updates require a manual hash refresh. To update:
+**orion-browser** is pulled from Kagi's Flatpak repository at
+`https://flatpak.orionbrowser.com/repo/beta/`, which is a plain OSTree repository. Kagi stopped publishing per-version `.flatpak` bundles after 0.3.0, so there is no versioned URL to fetch and no release feed to poll; the derivation instead pins the OSTree commit that the moving `beta` ref pointed at when the version was cut. To update to the latest beta build:
 
 ```
-# Set hash = "" in pkgs/orion-browser/default.nix, then:
-git add pkgs/orion-browser/default.nix && nix build .#orion-browser 2>&1 | grep -oP 'sha256-\S+'
-# Copy the hash back into the derivation and update the version date.
+nix run .#update-orion-browser
 ```
+
+This resolves the commit the `beta` ref currently points at and exits early if it matches the pinned one. Otherwise it reads the new version out of the application's AppStream metainfo, pulls the content, hashes the checkout, and rewrites `version`, `ostreeCommit`, and `outputHash` in `pkgs/orion-browser/default.nix`.
+
+Two OSTree details keep the common case cheap: commit metadata can be fetched without any content, and `--subpath` retrieves just the metainfo file carrying the version number. Both cost a couple of kilobytes, so the ~75 MiB content pull only happens when the commit has actually moved. Note that the version number appears only in the application's own `com.kagi.Orion.metainfo.xml` — the repository's `appstream2` ref carries release entries with no version attributes, and the OSTree commit message does not record it either.
 
 **whispering** tracks Whispering releases from the
 [EpicenterHQ/epicenter](https://github.com/EpicenterHQ/epicenter) monorepo.  The
