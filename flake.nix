@@ -242,14 +242,19 @@
                   sys.exit(1)
               return m.group(1)
 
+          # Hash the same versioned URLs the derivation fetches from. The
+          # /app/latest/ paths serve a separate, more frequently rebuilt object
+          # than /app/releases/<version>/, so hashing them yields a value that
+          # never matches what the derivation downloads. A "?ver=" query string
+          # does not select the versioned object either; the path must be used.
           print("Fetching Linux AppImage hash...")
           linux_hash = prefetch_hash(
-              "https://next-assets.msty.studio/app/latest/linux/MstyStudio_x86_64.AppImage"
+              f"https://next-assets.msty.studio/app/releases/{latest}/linux/MstyStudio_x86_64.AppImage"
           )
 
           print("Fetching macOS DMG hash...")
           macos_hash = prefetch_hash(
-              f"https://next-assets.msty.studio/app/latest/mac/MstyStudio_arm64.dmg?ver={latest}"
+              f"https://next-assets.msty.studio/app/releases/{latest}/mac/MstyStudio_arm64.dmg"
           )
 
           content = content.replace(f'version = "{current}"', f'version = "{latest}"', 1)
