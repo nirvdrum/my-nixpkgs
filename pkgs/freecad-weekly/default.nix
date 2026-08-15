@@ -8,7 +8,7 @@
 
 let
   pname = "freecad-weekly";
-  version = "2026.07.09";
+  version = "2026.08.12";
   tag = "weekly-${version}";
 in
 
@@ -46,7 +46,7 @@ else
 
     src = fetchurl {
       url = "https://github.com/FreeCAD/FreeCAD/releases/download/${tag}/FreeCAD_${tag}-macOS15-arm64.dmg";
-      hash = "sha256-mGqpzuwR8zg4Sq8T4cl2eEMpiDn/4ctHbzh4gpj4Kh8=";
+      hash = "sha256-F9A/+qyMluEkLLOa1FNicn0BF2saV9nI13zh+brk+WQ=";
     };
 
     nativeBuildInputs = [ undmg ];
