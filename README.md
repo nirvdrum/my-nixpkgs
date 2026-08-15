@@ -20,6 +20,7 @@ A personal Nix flake containing packages not yet available in nixpkgs. The goal 
 | `textgen`          | Local LLM inference UI — CPU default (Linux x86_64) or ARM64 (macOS)                     |
 | `textgen-rocm`     | Local LLM inference UI — ROCm variant (Linux x86_64 only)                                |
 | `textgen-vulkan`   | Local LLM inference UI — Vulkan variant (Linux x86_64 only)                              |
+| `unsloth-desktop`  | Native desktop app for running and training LLMs and diffusion models locally            |
 | `vibe`             | Easy Linux virtual machine on macOS to sandbox LLM agents (aarch64-darwin only)           |
 | `whispering`       | Local-first speech-to-text: press shortcut, speak, get text (open source)                |
 
@@ -237,6 +238,14 @@ nix run .#update-whispering
 This queries the GitHub releases API, finds the newest qualifying release, prefetches
 fresh hashes for both the Linux x86_64 AppImage and the macOS aarch64 `.app` tarball,
 and rewrites `pkgs/whispering/default.nix`.
+
+**unsloth-desktop** tracks Unsloth Desktop releases from the [unslothai/unsloth](https://github.com/unslothai/unsloth) GitHub repository. Most releases in that repository are model announcements (e.g. "Qwen3.8-27B") rather than app versions, so the updater filters releases to those whose tag matches `v<X.Y.Z>-beta` *and* ship an `Unsloth-Desktop-*` asset. To update to the latest release:
+
+```
+nix run .#update-unsloth-desktop
+```
+
+This queries the GitHub releases API, finds the newest qualifying release, prefetches fresh hashes for both the Linux x86_64 AppImage and the macOS DMG, and rewrites `pkgs/unsloth-desktop/default.nix`.
 
 ### Add a new package
 

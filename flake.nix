@@ -35,6 +35,7 @@
           libjxl = nixpkgs-stable.legacyPackages.${system}.libjxl;
         };
         textgen = pkgs.callPackage ./pkgs/textgen { };
+        unsloth-desktop = pkgs.callPackage ./pkgs/unsloth-desktop { };
         whispering = pkgs.callPackage ./pkgs/whispering { };
       }
       // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
@@ -526,6 +527,111 @@
           print("Stage the change with: git add pkgs/whispering/default.nix")
         '';
 
+        # Queries the unslothai/unsloth GitHub releases for the newest release
+        # tag that ships an Unsloth Desktop asset.  The repository's releases
+        # are mostly model announcements (e.g. "Qwen3.8-27B") rather than app
+        # versions, so every release is inspected for a "Desktop" asset
+        # rather than trusting release ordering alone.  Tags follow
+        # "v<X.Y.Z>-beta"; asset filenames encode the same version with both
+        # "." and "-" collapsed to "_" (e.g. "v0.1.800-beta" ->
+        # "0_1_800_beta").  Must be run from the root of the flake checkout.
+        updateUnslothDesktopScript = pkgs.writeText "update-unsloth-desktop.py" ''
+          import json
+          import re
+          import subprocess
+          import sys
+          import os
+          import urllib.request
+
+          DERIVATION = "pkgs/unsloth-desktop/default.nix"
+          REPO_RELEASES_API = "https://api.github.com/repos/unslothai/unsloth/releases?per_page=30"
+          TAG_PATTERN = re.compile(r"^v(\d+\.\d+\.\d+-beta)$")
+
+          if not os.path.exists(DERIVATION):
+              print("error: run this script from the root of the flake", file=sys.stderr)
+              sys.exit(1)
+
+          print("Fetching unslothai/unsloth release list...")
+          request = urllib.request.Request(
+              REPO_RELEASES_API,
+              headers={"Accept": "application/vnd.github+json", "User-Agent": "nix-update-unsloth-desktop"},
+          )
+
+          with urllib.request.urlopen(request) as response:
+              releases = json.load(response)
+
+          latest = None
+          for release in releases:
+              tag = release.get("tag_name", "")
+              m = TAG_PATTERN.match(tag)
+              if not m:
+                  continue
+              asset_names = [asset.get("name", "") for asset in release.get("assets", [])]
+              if any(name.startswith("Unsloth-Desktop-") for name in asset_names):
+                  latest = m.group(1)
+                  break
+
+          if not latest:
+              print("error: could not determine latest Unsloth Desktop release tag", file=sys.stderr)
+              sys.exit(1)
+
+          with open(DERIVATION) as f:
+              content = f.read()
+
+          current_match = re.search(r'version = "([^"]+)"', content)
+          if not current_match:
+              print("error: could not find current version in derivation", file=sys.stderr)
+              sys.exit(1)
+
+          current = current_match.group(1)
+          print(f"Current: {current}  Latest: {latest}")
+
+          if current == latest:
+              print("Already up to date.")
+              sys.exit(0)
+
+          url_version = latest.replace(".", "_").replace("-", "_")
+
+          def prefetch_hash(url):
+              result = subprocess.run(
+                  ["nix", "store", "prefetch-file", url],
+                  capture_output=True, text=True
+              )
+              h = re.search(r"hash '([^']+)'", result.stdout + result.stderr)
+              if not h:
+                  print(f"error: could not fetch hash for {url}", file=sys.stderr)
+                  sys.exit(1)
+              return h.group(1)
+
+          print("Fetching Linux AppImage hash...")
+          linux_hash = prefetch_hash(
+              f"https://github.com/unslothai/unsloth/releases/download/v{latest}/Unsloth-Desktop-{url_version}-Linux.AppImage"
+          )
+
+          print("Fetching macOS DMG hash...")
+          macos_hash = prefetch_hash(
+              f"https://github.com/unslothai/unsloth/releases/download/v{latest}/Unsloth-Desktop-{url_version}-MacOS.dmg"
+          )
+
+          content = content.replace(f'version = "{current}"', f'version = "{latest}"', 1)
+          content = re.sub(
+              r'(Linux\.AppImage";\n\s+hash = ")[^"]*(")',
+              lambda m: m.group(1) + linux_hash + m.group(2),
+              content,
+          )
+          content = re.sub(
+              r'(MacOS\.dmg";\n\s+hash = ")[^"]*(")',
+              lambda m: m.group(1) + macos_hash + m.group(2),
+              content,
+          )
+
+          with open(DERIVATION, "w") as f:
+              f.write(content)
+
+          print(f"Updated {DERIVATION} from {current} to {latest}.")
+          print("Stage the change with: git add pkgs/unsloth-desktop/default.nix")
+        '';
+
         # Queries the oobabooga/textgen GitHub releases for the newest
         # release tag (format: v<X.Y.Z>), fetches fresh hashes for all
         # variant assets (cpu, vulkan, rocm on Linux; arm64 on macOS),
@@ -892,22 +998,33 @@
               print("Already up to date.")
               sys.exit(0)
 
-          # Prefetch hash using nix-prefetch-github.
-          # nix-prefetch-url / prefetch-file won't work for GitHub tarballs
-          # that need authentication or are private, so we use
-          # nix-prefetch-github or nix store prefetch-file with the archive URL.
+          # fetchFromGitHub is a fetchzip derivation: its hash covers the
+          # unpacked source tree, not the raw tarball bytes. nix-prefetch-url
+          # --unpack computes the former; nix store prefetch-file would
+          # compute the latter, producing a hash that never matches the build.
           archive_url = f"https://github.com/antirez/ds4/archive/{latest_sha}.tar.gz"
           print("Prefetching source hash...")
           result = subprocess.run(
-              ["nix", "store", "prefetch-file", archive_url],
+              ["nix-prefetch-url", "--unpack", archive_url],
               capture_output=True, text=True
           )
-          hash_match = re.search(r"hash '([^']+)'", result.stdout + result.stderr)
-          if not hash_match:
+          base32_hash = result.stdout.strip().splitlines()[-1] if result.stdout.strip() else ""
+          if not base32_hash or result.returncode != 0:
               print(f"error: could not fetch hash for {archive_url}", file=sys.stderr)
+              print(result.stdout + result.stderr, file=sys.stderr)
               sys.exit(1)
 
-          new_hash = hash_match.group(1)
+          # nix-prefetch-url emits the legacy base32 encoding; convert it to
+          # the SRI format used throughout this flake.
+          result = subprocess.run(
+              ["nix", "hash", "convert", "--hash-algo", "sha256", "--to", "sri", base32_hash],
+              capture_output=True, text=True
+          )
+          new_hash = result.stdout.strip().splitlines()[-1] if result.stdout.strip() else ""
+          if not new_hash.startswith("sha256-"):
+              print("error: could not convert hash to SRI format", file=sys.stderr)
+              print(result.stdout + result.stderr, file=sys.stderr)
+              sys.exit(1)
 
           content = content.replace(f'version = "{current_version}"', f'version = "{latest_version}"', 1)
           content = content.replace(f'rev = "{current_rev}"', f'rev = "{latest_sha}"', 1)
@@ -1172,6 +1289,13 @@
         };
 
 
+        update-unsloth-desktop = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "update-unsloth-desktop" ''
+            exec ${pkgs.python3}/bin/python3 ${updateUnslothDesktopScript}
+          '');
+        };
+
         update-vibe = {
           type = "app";
           program = toString (pkgs.writeShellScript "update-vibe" ''
@@ -1191,7 +1315,7 @@
           program = toString (pkgs.writeShellScript "update-all" ''
             failed=""
 
-            for app in update-actual-cli update-deadbranch update-ds4 update-fastmail update-fastmail-cli update-fastmail-rules-cli update-freecad-weekly update-godot-dev update-msty-studio update-orion-browser update-textgen update-vibe update-whispering; do
+            for app in update-actual-cli update-deadbranch update-ds4 update-fastmail update-fastmail-cli update-fastmail-rules-cli update-freecad-weekly update-godot-dev update-msty-studio update-orion-browser update-textgen update-unsloth-desktop update-vibe update-whispering; do
               echo "=== Running $app ==="
               if nix run .#"$app"; then
                 echo "=== $app completed successfully ==="
