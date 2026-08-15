@@ -5,7 +5,7 @@
 # The CPU-only path is provided for diagnostics only and is known to crash macOS kernels.
 let
   pname = "ds4";
-  version = "unstable-2026-06-02";
+  version = "unstable-2026-08-09";
 in
 
 if !stdenv.hostPlatform.isDarwin then
@@ -17,8 +17,8 @@ else
     src = fetchFromGitHub {
       owner = "antirez";
       repo = "ds4";
-      rev = "477c0e82e2699b35a65fd0a1ed6fe66b41087dfe";
-      hash = "sha256-9cFkie5PhhpsDYKazLJrLkihNpeXSnRIn11mYOOYVig=";
+      rev = "84cc882352757baf628a1776badf7cc54d584e28";
+      hash = "sha256-mdvKxI+/vDQcrpHepvXPmYcTjPTRnqJWWU0UFFnLJJk=";
     };
 
     # Override -mcpu=native for portable binaries
