@@ -2,7 +2,7 @@
 
 buildNpmPackage rec {
   pname = "actual-cli";
-  version = "26.7.0";
+  version = "26.8.1";
 
   # The package is only published to the npm registry (no GitHub release
   # tarball), so we fetch the npm tarball directly. It extracts to a top-level
@@ -10,7 +10,7 @@ buildNpmPackage rec {
   # build and fetchNpmDeps.
   src = fetchurl {
     url = "https://registry.npmjs.org/@actual-app/cli/-/cli-${version}.tgz";
-    hash = "sha256-XPXfNj2KhsaRzNusHfkL/u+KOhih/hyQuEx+zxTNsZw=";
+    hash = "sha256-1UAthd/As1enwzuuM0auQfEpB+ujj7myNxKYCSGH8xc=";
   };
 
   sourceRoot = "package";
@@ -26,7 +26,7 @@ buildNpmPackage rec {
     cp ${./package-lock.json} package-lock.json
   '';
 
-  npmDepsHash = "sha256-9B5mY25LdMiDu+kXrVrygIvwlDpqhL5jvCQSdd0At/I=";
+  npmDepsHash = "sha256-cSeYLk15QiabqK09DieFDPZHp1a04Bngi0o/XDZLW6k=";
 
   # The published tarball already contains the bundled build output; there is
   # nothing for the npm build script (vite) to do, and the source it would need
