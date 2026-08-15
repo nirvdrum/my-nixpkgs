@@ -44,11 +44,6 @@ else
   stdenvNoCC.mkDerivation {
     inherit pname version;
 
-    # Stdenv's default Darwin fixup phase ad-hoc (re-)signs individual
-    # Mach-O files it finds under $out. Disable that so our own bundle-wide
-    # codesign call in postFixup below is the only signing that happens.
-    dontCodeSign = true;
-
     src = fetchurl {
       url = "https://next-assets.msty.studio/app/releases/${version}/mac/MstyStudio_arm64.dmg";
       hash = "sha256-/RoRoeaXBvyUxpWJ/pAlzxdEk+8++RnbSkKctHwb1CE=";
@@ -56,12 +51,17 @@ else
 
     nativeBuildInputs = [ _7zz ];
 
-    # The DMG uses APFS, which undmg does not support. Use 7zz instead,
-    # excluding Apple code signature extended attributes that can cause
-    # the extracted app to malfunction.
+    # The DMG uses APFS, which undmg does not support, so use 7zz instead.
+    # Extract the bundle verbatim: 7zz restores the framework symlinks that
+    # Electron bundles rely on, and the code signature must be preserved
+    # intact. Mach-O binaries carry their signatures embedded, while the
+    # _CodeSignature directories seal the remaining resources, so omitting
+    # any part of the bundle invalidates it and forces a lossy ad hoc
+    # re-signing that would discard both the Developer ID signature and the
+    # JIT entitlements Electron needs.
     unpackPhase = ''
       runHook preUnpack
-      7zz x -xr'!*.app/Contents/_CodeSignature' $src
+      7zz x $src
       runHook postUnpack
     '';
 
@@ -78,18 +78,6 @@ else
       mkdir -p "$out/bin"
       ln -s "$out/Applications/MstyStudio.app/Contents/MacOS/MstyStudio" "$out/bin/msty-studio"
       runHook postInstall
-    '';
-
-    # Extracting with 7zz (excluding _CodeSignature, per the comment above)
-    # invalidates the original Developer ID signature, and stdenv's fixup
-    # phase further mutates files afterward. Signing in installPhase would
-    # just get invalidated by that later mutation, so re-sign ad hoc in
-    # postFixup instead, after every other fixup step has finished touching
-    # the bundle. Ad hoc is sufficient since this only needs to satisfy
-    # Gatekeeper's signature-presence check for local execution, not
-    # third-party distribution.
-    postFixup = ''
-      /usr/bin/codesign --force --deep --sign - "$out/Applications/MstyStudio.app"
     '';
 
     meta = {
