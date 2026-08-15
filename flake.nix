@@ -532,6 +532,123 @@
           print("Stage the change with: git add pkgs/whispering/default.nix")
         '';
 
+        # Queries the FreeCAD/FreeCAD GitHub releases for the newest
+        # weekly-YYYY.MM.DD pre-release and rewrites the derivation with fresh
+        # hashes for both the Linux x86_64 AppImage and the macOS 15 aarch64
+        # .dmg.  This replaces a plain nix-update invocation, which could only
+        # ever see one of the two hashes: the derivation selects its source
+        # inside an `if stdenvNoCC.hostPlatform.isLinux` conditional, so the
+        # branch for the platform the updater is not running on is never
+        # evaluated.  nix-update would bump the shared `version` along with the
+        # hash it could see, silently repointing the other platform's URL at
+        # the new tag while leaving its hash on the old build.  Must be run
+        # from the root of the flake checkout.
+        updateFreecadWeeklyScript = pkgs.writeText "update-freecad-weekly.py" ''
+          import json
+          import re
+          import subprocess
+          import sys
+          import os
+          import urllib.request
+
+          DERIVATION = "pkgs/freecad-weekly/default.nix"
+          REPO_RELEASES_API = "https://api.github.com/repos/FreeCAD/FreeCAD/releases?per_page=30"
+          TAG_PATTERN = re.compile(r"^weekly-(\d{4}\.\d{2}\.\d{2})$")
+
+          if not os.path.exists(DERIVATION):
+              print("error: run this script from the root of the flake", file=sys.stderr)
+              sys.exit(1)
+
+          print("Fetching FreeCAD/FreeCAD release list...")
+          request = urllib.request.Request(
+              REPO_RELEASES_API,
+              headers={"Accept": "application/vnd.github+json", "User-Agent": "nix-update-freecad-weekly"},
+          )
+
+          with urllib.request.urlopen(request) as response:
+              releases = json.load(response)
+
+          def assets_for(release, version):
+              # A weekly is only a candidate if it ships both artifacts we
+              # package.  Not every weekly builds every platform: the
+              # 2026.08.05 release, for instance, omitted the macOS 10 x86_64
+              # .dmg that its neighbours published.
+              names = [asset.get("name", "") for asset in release.get("assets", [])]
+              linux = f"FreeCAD_weekly-{version}-Linux-x86_64.AppImage"
+              macos = f"FreeCAD_weekly-{version}-macOS15-arm64.dmg"
+              return linux in names and macos in names
+
+          # Stable releases are interleaved with the weeklies in the API's
+          # ordering, which follows creation date, so the newest weekly is not
+          # reliably the first entry.  Collect every complete candidate and
+          # take the maximum date rather than trusting the ordering.
+          candidates = []
+          for release in releases:
+              m = TAG_PATTERN.match(release.get("tag_name", ""))
+              if m and assets_for(release, m.group(1)):
+                  candidates.append(m.group(1))
+
+          if not candidates:
+              print("error: could not determine latest FreeCAD weekly release", file=sys.stderr)
+              sys.exit(1)
+
+          latest = max(candidates)
+
+          with open(DERIVATION) as f:
+              content = f.read()
+
+          current_match = re.search(r'version = "([^"]+)"', content)
+          if not current_match:
+              print("error: could not find current version in derivation", file=sys.stderr)
+              sys.exit(1)
+
+          current = current_match.group(1)
+          print(f"Current: {current}  Latest: {latest}")
+
+          if current == latest:
+              print("Already up to date.")
+              sys.exit(0)
+
+          def prefetch_hash(url):
+              result = subprocess.run(
+                  ["nix", "store", "prefetch-file", url],
+                  capture_output=True, text=True
+              )
+              h = re.search(r"hash '([^']+)'", result.stdout + result.stderr)
+              if not h:
+                  print(f"error: could not fetch hash for {url}", file=sys.stderr)
+                  sys.exit(1)
+              return h.group(1)
+
+          print("Fetching Linux x86_64 AppImage hash...")
+          linux_hash = prefetch_hash(
+              f"https://github.com/FreeCAD/FreeCAD/releases/download/weekly-{latest}/FreeCAD_weekly-{latest}-Linux-x86_64.AppImage"
+          )
+
+          print("Fetching macOS aarch64 .dmg hash...")
+          macos_hash = prefetch_hash(
+              f"https://github.com/FreeCAD/FreeCAD/releases/download/weekly-{latest}/FreeCAD_weekly-{latest}-macOS15-arm64.dmg"
+          )
+
+          content = content.replace(f'version = "{current}"', f'version = "{latest}"', 1)
+          content = re.sub(
+              r'(Linux-x86_64\.AppImage";\n\s+hash = ")[^"]+(")',
+              lambda m: m.group(1) + linux_hash + m.group(2),
+              content,
+          )
+          content = re.sub(
+              r'(macOS15-arm64\.dmg";\n\s+hash = ")[^"]+(")',
+              lambda m: m.group(1) + macos_hash + m.group(2),
+              content,
+          )
+
+          with open(DERIVATION, "w") as f:
+              f.write(content)
+
+          print(f"Updated {DERIVATION} from {current} to {latest}.")
+          print("Stage the change with: git add pkgs/freecad-weekly/default.nix")
+        '';
+
         # Queries the unslothai/unsloth GitHub releases for the newest release
         # tag that ships an Unsloth Desktop asset.  The repository's releases
         # are mostly model announcements (e.g. "Qwen3.8-27B") rather than app
@@ -1256,10 +1373,8 @@
 
         update-freecad-weekly = {
           type = "app";
-          # Filters to weekly-YYYY.MM.DD tags only, so a stable 1.x release
-          # landing on the GitHub releases page doesn't get picked up as an update.
           program = toString (pkgs.writeShellScript "update-freecad-weekly" ''
-            exec ${pkgs.nix-update}/bin/nix-update --flake freecad-weekly --version-regex 'weekly-(.*)'
+            exec ${pkgs.python3}/bin/python3 ${updateFreecadWeeklyScript}
           '');
         };
 
