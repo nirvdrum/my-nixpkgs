@@ -16,7 +16,7 @@ if stdenvNoCC.hostPlatform.isLinux then
   let
     src = fetchurl {
       url = "https://github.com/FreeCAD/FreeCAD/releases/download/${tag}/FreeCAD_${tag}-Linux-x86_64.AppImage";
-      hash = "sha256-RWhSY3P70m4PTYfCKFe96Vbd/R5Cnud/rudDAAyD8iY=";
+      hash = "sha256-HWtSpevexjgmPCc86mr2IZS3b4HA4uch3Tr5R+l+0Pc=";
     };
 
     appimageContents = appimageTools.extractType2 { inherit pname version src; };
