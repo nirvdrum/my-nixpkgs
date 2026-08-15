@@ -44,6 +44,11 @@ else
   stdenvNoCC.mkDerivation {
     inherit pname version;
 
+    # Stdenv's default Darwin fixup phase ad-hoc (re-)signs individual
+    # Mach-O files it finds under $out. Disable that so our own bundle-wide
+    # codesign call in postFixup below is the only signing that happens.
+    dontCodeSign = true;
+
     src = fetchurl {
       url = "https://next-assets.msty.studio/app/releases/${version}/mac/MstyStudio_arm64.dmg";
       hash = "sha256-ZcKYNaJ9GZ7GW/v1NUBjqnY/0FQarziLTHjMjzzukJw=";
@@ -65,10 +70,26 @@ else
     installPhase = ''
       runHook preInstall
       mkdir -p "$out/Applications"
-      cp -r *.app "$out/Applications/"
+      # The .app bundle is nested inside a volume-named directory (e.g. "MstyStudio
+      # <version>-arm64/") rather than sitting at the top level, so a plain *.app
+      # glob doesn't find it.
+      app=$(find . -mindepth 1 -maxdepth 2 -name '*.app')
+      cp -r "$app" "$out/Applications/"
       mkdir -p "$out/bin"
       ln -s "$out/Applications/MstyStudio.app/Contents/MacOS/MstyStudio" "$out/bin/msty-studio"
       runHook postInstall
+    '';
+
+    # Extracting with 7zz (excluding _CodeSignature, per the comment above)
+    # invalidates the original Developer ID signature, and stdenv's fixup
+    # phase further mutates files afterward. Signing in installPhase would
+    # just get invalidated by that later mutation, so re-sign ad hoc in
+    # postFixup instead, after every other fixup step has finished touching
+    # the bundle. Ad hoc is sufficient since this only needs to satisfy
+    # Gatekeeper's signature-presence check for local execution, not
+    # third-party distribution.
+    postFixup = ''
+      /usr/bin/codesign --force --deep --sign - "$out/Applications/MstyStudio.app"
     '';
 
     meta = {
