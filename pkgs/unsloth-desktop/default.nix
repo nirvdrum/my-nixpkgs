@@ -28,6 +28,61 @@ if stdenvNoCC.hostPlatform.isLinux then
   appimageTools.wrapType2 {
     inherit pname version src;
 
+    # The AppImage bundles a Tauri binary that dynamically loads its webview and
+    # tray-icon stack from the host system rather than shipping it. None of these
+    # libraries are in appimageTools' default FHS environment, so without them the
+    # app exits at startup complaining about missing Linux libraries.
+    extraPkgs = pkgs: [
+      pkgs.webkitgtk_4_1 # Provides libwebkit2gtk-4.1 and libjavascriptcoregtk-4.1.
+      pkgs.libsoup_3
+      pkgs.libayatana-appindicator
+
+      # On first run the app builds a Python virtual environment under
+      # ~/.unsloth/studio and installs PyTorch, NumPy, and friends into it as
+      # binary wheels. Those wheels link against libstdc++.so.6, which is absent
+      # from appimageTools' default FHS environment, so importing torch fails
+      # with an OSError. The app treats any torch import failure as "no GPU
+      # backend available" and silently falls back to CPU-only mode, reporting
+      # "No visible GPU detected" even when ROCm and the dGPU are working.
+      pkgs.stdenv.cc.cc.lib
+
+      # WebKitGTK and libsoup get TLS support solely from glib-networking's GIO
+      # module. Without it there is no TLS backend at all, so every HTTPS request
+      # the webview makes fails while plain HTTP to the local backend keeps
+      # working. The visible symptom is an app that starts fine but never
+      # populates the model list and returns nothing for model searches, since
+      # those are fetched by the frontend directly rather than through Python.
+      pkgs.glib-networking
+
+      # glib-networking's libproxy module links against a libcurl built with
+      # OpenSSL, but the only libcurl otherwise present is the GnuTLS flavour,
+      # so the module fails to load with a CURL_OPENSSL_4 version error. That is
+      # not fatal, since it only costs proxy autodetection rather than TLS, but
+      # it puts a misleading library error on stderr on every launch.
+      pkgs.curl
+    ];
+
+    # Putting libstdc++ in the FHS environment is necessary but not sufficient.
+    # The virtual environment the app builds on first run is created from
+    # whichever Python it finds on PATH, and inside the FHS environment that is
+    # the Nix-store Python inherited from the host profile rather than an
+    # FHS-native one. Nixpkgs patches the default /lib and /usr/lib entries out
+    # of glibc's loader search path, so a Nix-store interpreter never looks in
+    # /usr/lib64 and cannot see the FHS environment's libraries at all. Exporting
+    # LD_LIBRARY_PATH is what bridges the two, since the loader honours it
+    # regardless of which glibc it came from.
+    #
+    # GIO looks for modules in the directory compiled into the glib it was built
+    # against, which is a Nix store path rather than the FHS environment's
+    # /usr/lib64/gio/modules, so glib-networking would go unfound even though it
+    # is installed. The host also exports GIO_EXTRA_MODULES pointing at its own
+    # dconf and gvfs modules, which is inherited here, so prepend rather than
+    # overwrite to leave those working.
+    profile = ''
+      export LD_LIBRARY_PATH="/usr/lib64''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+      export GIO_EXTRA_MODULES="/usr/lib64/gio/modules''${GIO_EXTRA_MODULES:+:$GIO_EXTRA_MODULES}"
+    '';
+
     extraInstallCommands = ''
       install -Dm444 ${appimageContents}/Unsloth.desktop \
         $out/share/applications/${pname}.desktop
