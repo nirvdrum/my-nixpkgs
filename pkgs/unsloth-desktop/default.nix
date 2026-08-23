@@ -8,7 +8,7 @@
 
 let
   pname = "unsloth-desktop";
-  version = "0.1.800-beta";
+  version = "0.1.801-beta";
 
   # Release assets encode the version with dots and hyphens both collapsed to
   # underscores (e.g. "0.1.800-beta" -> "0_1_800_beta"), while the release tag
@@ -20,7 +20,7 @@ if stdenvNoCC.hostPlatform.isLinux then
   let
     src = fetchurl {
       url = "https://github.com/unslothai/unsloth/releases/download/v${version}/Unsloth-Desktop-${urlVersion}-Linux.AppImage";
-      hash = "sha256-GpqzGpMUz0raNDcUEYZFNxe5a29SqPJ4eD0EGaq+/K0=";
+      hash = "sha256-Jphi4V0gNrz8gSKIAtuzBrrIugNNBXp9eYdc2RohBVA=";
     };
 
     appimageContents = appimageTools.extractType2 { inherit pname version src; };
@@ -35,6 +35,13 @@ if stdenvNoCC.hostPlatform.isLinux then
     extraPkgs = pkgs: [
       pkgs.webkitgtk_4_1 # Provides libwebkit2gtk-4.1 and libjavascriptcoregtk-4.1.
       pkgs.libsoup_3
+
+      # libsoup 3 links against nghttp2 for its HTTP/2 support, but only its
+      # "out" output lands in the FHS environment while the shared library
+      # lives in the separate "lib" output, so it has to be requested
+      # explicitly. Without it the main binary fails to start at all, since
+      # libsoup is one of its direct dependencies.
+      pkgs.nghttp2.lib
       pkgs.libayatana-appindicator
 
       # On first run the app builds a Python virtual environment under
@@ -111,7 +118,7 @@ else
 
     src = fetchurl {
       url = "https://github.com/unslothai/unsloth/releases/download/v${version}/Unsloth-Desktop-${urlVersion}-MacOS.dmg";
-      hash = "sha256-DNLyABsI34vU5H6leEzK6RRKuAFo9JZKK4nJzY4LFas=";
+      hash = "sha256-nSFWptgLVApQG7oYgxjIZU7RYQ+0ndCneJMfpiPclho=";
     };
 
     nativeBuildInputs = [ undmg ];
