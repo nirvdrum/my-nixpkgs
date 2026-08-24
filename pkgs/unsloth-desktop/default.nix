@@ -1,9 +1,13 @@
 {
   lib,
+  stdenv,
   stdenvNoCC,
   appimageTools,
   fetchurl,
+  runCommand,
   undmg,
+  zlib,
+  zstd,
 }:
 
 let
@@ -24,9 +28,52 @@ if stdenvNoCC.hostPlatform.isLinux then
     };
 
     appimageContents = appimageTools.extractType2 { inherit pname version src; };
+
+    # The Python virtual environment the app builds under ~/.unsloth on first run
+    # is created from a Nix-store interpreter, and the binary wheels it installs
+    # there (NumPy, PyTorch, and everything downstream of them) expect the three
+    # libraries below to come from the host the way they would on any ordinary
+    # distribution. Nixpkgs patches glibc's loader to consult only the cache
+    # inside its own store path, so neither the FHS environment's /usr/lib64 nor
+    # its ld.so.conf is ever searched and LD_LIBRARY_PATH is the only way to
+    # reach them.
+    #
+    # This is deliberately a narrow list of store paths rather than /usr/lib64:
+    # the AppImage ships its own GTK, GLib, and WebKit stack, and putting the
+    # whole FHS library directory ahead of those would replace the versions the
+    # app was built and tested against.
+    pythonWheelLibraries = lib.makeLibraryPath [
+      stdenv.cc.cc.lib # Provides libstdc++.so.6 and libgcc_s.so.1.
+      zlib
+      zstd
+    ];
+
+    # The app's own launcher saves LD_LIBRARY_PATH into UNSLOTH_HOST_LD_LIBRARY_PATH
+    # and then unsets it, so that host GTK, GLib, and WebKit libraries cannot come
+    # ahead of the bundled ones. Its comment claims the value is handed back to the
+    # processes it manages, but the Python backend it spawns is left with only the
+    # saved copy under the other name, which nothing reads. That defeats anything
+    # LD_LIBRARY_PATH is set to before launch, including the FHS environment's own
+    # profile, so set the value the wheels need after the launcher has finished
+    # clearing it instead. Upstream's isolation is largely preserved: libstdc++ and
+    # zlib are not bundled at all, and libzstd is the only overlap, which the
+    # bundled consumers reach through their own RUNPATHs anyway.
+    patchedAppimageContents = runCommand "${pname}-${version}-patched" { } ''
+      cp -r ${appimageContents} $out
+      chmod -R u+w $out
+
+      substituteInPlace $out/AppRun.wrapped \
+        --replace-fail '# WebKitGTK resolves' 'export LD_LIBRARY_PATH="${pythonWheelLibraries}"
+
+# WebKitGTK resolves'
+    '';
   in
-  appimageTools.wrapType2 {
-    inherit pname version src;
+  appimageTools.wrapAppImage {
+    inherit pname version;
+
+    # wrapAppImage runs whatever directory it is handed here, so this is where
+    # the patched copy of the extracted AppImage is substituted for the original.
+    src = patchedAppimageContents;
 
     # The AppImage bundles a Tauri binary that dynamically loads its webview and
     # tray-icon stack from the host system rather than shipping it. None of these
@@ -44,13 +91,11 @@ if stdenvNoCC.hostPlatform.isLinux then
       pkgs.nghttp2.lib
       pkgs.libayatana-appindicator
 
-      # On first run the app builds a Python virtual environment under
-      # ~/.unsloth/studio and installs PyTorch, NumPy, and friends into it as
-      # binary wheels. Those wheels link against libstdc++.so.6, which is absent
-      # from appimageTools' default FHS environment, so importing torch fails
-      # with an OSError. The app treats any torch import failure as "no GPU
-      # backend available" and silently falls back to CPU-only mode, reporting
-      # "No visible GPU detected" even when ROCm and the dGPU are working.
+      # Anything that resolves libraries out of the FHS environment rather than
+      # from a RUNPATH needs the C++ runtime, which appimageTools' default
+      # environment does not include. The Python wheels installed under
+      # ~/.unsloth get their copy from pythonWheelLibraries above instead, since
+      # a Nix-store interpreter never searches /usr/lib64 at all.
       pkgs.stdenv.cc.cc.lib
 
       # WebKitGTK and libsoup get TLS support solely from glib-networking's GIO
@@ -69,15 +114,11 @@ if stdenvNoCC.hostPlatform.isLinux then
       pkgs.curl
     ];
 
-    # Putting libstdc++ in the FHS environment is necessary but not sufficient.
-    # The virtual environment the app builds on first run is created from
-    # whichever Python it finds on PATH, and inside the FHS environment that is
-    # the Nix-store Python inherited from the host profile rather than an
-    # FHS-native one. Nixpkgs patches the default /lib and /usr/lib entries out
-    # of glibc's loader search path, so a Nix-store interpreter never looks in
-    # /usr/lib64 and cannot see the FHS environment's libraries at all. Exporting
-    # LD_LIBRARY_PATH is what bridges the two, since the loader honours it
-    # regardless of which glibc it came from.
+    # Exporting LD_LIBRARY_PATH here covers everything that runs inside the FHS
+    # environment before the AppImage's own launcher takes over; the launcher
+    # then clears the variable, which is why the libraries the Python backend
+    # needs are re-exported from the patched AppRun.wrapped above rather than
+    # from here.
     #
     # GIO looks for modules in the directory compiled into the glib it was built
     # against, which is a Nix store path rather than the FHS environment's
