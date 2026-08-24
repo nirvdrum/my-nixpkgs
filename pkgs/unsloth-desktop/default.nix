@@ -112,6 +112,21 @@ if stdenvNoCC.hostPlatform.isLinux then
       # not fatal, since it only costs proxy autodetection rather than TLS, but
       # it puts a misleading library error on stderr on every launch.
       pkgs.curl
+
+      # The planner that builds each llama-server command line probes free VRAM
+      # through nvidia-smi, then amd-smi, then torch. With amd-smi missing it
+      # reaches the torch fallback, which knows only what the backend process's
+      # own allocator holds, so the context size and offload split get chosen
+      # against a figure that ignores any llama-server already resident on the
+      # card. Installing it also drops an "amd-smi not found on PATH" warning
+      # from every launch and lets the app's AMD monitoring poll real
+      # utilisation figures.
+      #
+      # Note that this does not correct the VRAM number the UI displays. That
+      # one comes from torch.cuda.memory_allocated inside the backend process,
+      # which by construction cannot see a GGUF model held by a separate
+      # llama.cpp process, and so reads near zero however full the card is.
+      pkgs.rocmPackages.amdsmi
     ];
 
     # Exporting LD_LIBRARY_PATH here covers everything that runs inside the FHS
