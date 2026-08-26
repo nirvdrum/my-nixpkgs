@@ -12,7 +12,7 @@
 
 let
   pname = "unsloth-desktop";
-  version = "0.1.801-beta";
+  version = "0.1.803-beta";
 
   # Release assets encode the version with dots and hyphens both collapsed to
   # underscores (e.g. "0.1.800-beta" -> "0_1_800_beta"), while the release tag
@@ -24,7 +24,7 @@ if stdenvNoCC.hostPlatform.isLinux then
   let
     src = fetchurl {
       url = "https://github.com/unslothai/unsloth/releases/download/v${version}/Unsloth-Desktop-${urlVersion}-Linux.AppImage";
-      hash = "sha256-Jphi4V0gNrz8gSKIAtuzBrrIugNNBXp9eYdc2RohBVA=";
+      hash = "sha256-xSMxWPXlDhOHQzH0DDAGGaWw4q3ib8nAku/Ze8lDhkA=";
     };
 
     appimageContents = appimageTools.extractType2 { inherit pname version src; };
@@ -174,7 +174,7 @@ else
 
     src = fetchurl {
       url = "https://github.com/unslothai/unsloth/releases/download/v${version}/Unsloth-Desktop-${urlVersion}-MacOS.dmg";
-      hash = "sha256-nSFWptgLVApQG7oYgxjIZU7RYQ+0ndCneJMfpiPclho=";
+      hash = "sha256-GF/Jgpt903ytsUD03gQcofiGi1K9hfVqD7jTB4jJ+24=";
     };
 
     nativeBuildInputs = [ undmg ];
