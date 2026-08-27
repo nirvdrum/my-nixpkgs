@@ -6,6 +6,7 @@
   fetchurl,
   runCommand,
   undmg,
+  vulkan-loader,
   zlib,
   zstd,
 }:
@@ -41,6 +42,18 @@ if stdenvNoCC.hostPlatform.isLinux then
       stdenv.cc.cc.lib # Provides libstdc++.so.6 and libgcc_s.so.1.
       zlib
       zstd
+
+      # The backend probes free VRAM for the Vulkan llama.cpp build by dlopening
+      # the bundled libggml-vulkan.so from a short-lived Python subprocess, and
+      # that pulls in libvulkan.so.1. The FHS environment does provide the
+      # loader, but this interpreter cannot see /usr/lib64, so the probe fails
+      # with "ggml-vulkan load failed" and the planner concludes the machine has
+      # no GPUs at all. It then hands placement to llama.cpp's --fit at the full
+      # requested context, which strands a layer on the CPU and costs roughly 3x
+      # on generation. Inference itself is unaffected, since llama-server
+      # resolves the loader from the FHS environment the ordinary way, so the
+      # only symptom is a badly planned command line.
+      vulkan-loader
     ];
 
     # The app's own launcher saves LD_LIBRARY_PATH into UNSLOTH_HOST_LD_LIBRARY_PATH
