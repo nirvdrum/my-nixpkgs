@@ -654,9 +654,9 @@
         # are mostly model announcements (e.g. "Qwen3.8-27B") rather than app
         # versions, so every release is inspected for a "Desktop" asset
         # rather than trusting release ordering alone.  Tags follow
-        # "v<X.Y.Z>-beta"; asset filenames encode the same version with both
-        # "." and "-" collapsed to "_" (e.g. "v0.1.800-beta" ->
-        # "0_1_800_beta").  Must be run from the root of the flake checkout.
+        # "v<X.Y.Z>-beta"; asset filenames carry no version at all, so the tag
+        # is the only thing that distinguishes one release's download URL from
+        # another's.  Must be run from the root of the flake checkout.
         updateUnslothDesktopScript = pkgs.writeText "update-unsloth-desktop.py" ''
           import json
           import re
@@ -712,8 +712,6 @@
               print("Already up to date.")
               sys.exit(0)
 
-          url_version = latest.replace(".", "_").replace("-", "_")
-
           def prefetch_hash(url):
               result = subprocess.run(
                   ["nix", "store", "prefetch-file", url],
@@ -727,12 +725,12 @@
 
           print("Fetching Linux AppImage hash...")
           linux_hash = prefetch_hash(
-              f"https://github.com/unslothai/unsloth/releases/download/v{latest}/Unsloth-Desktop-{url_version}-Linux.AppImage"
+              f"https://github.com/unslothai/unsloth/releases/download/v{latest}/Unsloth-Desktop-Linux.AppImage"
           )
 
           print("Fetching macOS DMG hash...")
           macos_hash = prefetch_hash(
-              f"https://github.com/unslothai/unsloth/releases/download/v{latest}/Unsloth-Desktop-{url_version}-MacOS.dmg"
+              f"https://github.com/unslothai/unsloth/releases/download/v{latest}/Unsloth-Desktop-MacOS.dmg"
           )
 
           content = content.replace(f'version = "{current}"', f'version = "{latest}"', 1)
