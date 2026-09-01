@@ -18,6 +18,7 @@ A personal Nix flake containing packages not yet available in nixpkgs. The goal 
 | `h3c`              | MiniMax H3 text-to-video/audio inference engine (Metal, aarch64-darwin only, binary: `h3`) |
 | `msty-studio`      | Desktop application for running and managing local AI models                              |
 | `orion-browser`    | Web browser built by Kagi, using WebKitGTK (early beta, x86_64-linux only)               |
+| `prusa-slicer-beta` | PrusaSlicer pre-release builds — alphas, betas, and RCs (aarch64-darwin only)            |
 | `textgen`          | Local LLM inference UI — CPU default (Linux x86_64) or ARM64 (macOS)                     |
 | `textgen-rocm`     | Local LLM inference UI — ROCm variant (Linux x86_64 only)                                |
 | `textgen-vulkan`   | Local LLM inference UI — Vulkan variant (Linux x86_64 only)                              |
@@ -238,6 +239,18 @@ nix run .#update-orion-browser
 This resolves the commit the `beta` ref currently points at and exits early if it matches the pinned one. Otherwise it reads the new version out of the application's AppStream metainfo, pulls the content, hashes the checkout, and rewrites `version`, `ostreeCommit`, and `outputHash` in `pkgs/orion-browser/default.nix`.
 
 Two OSTree details keep the common case cheap: commit metadata can be fetched without any content, and `--subpath` retrieves just the metainfo file carrying the version number. Both cost a couple of kilobytes, so the ~75 MiB content pull only happens when the commit has actually moved. Note that the version number appears only in the application's own `com.kagi.Orion.metainfo.xml` — the repository's `appstream2` ref carries release entries with no version attributes, and the OSTree commit message does not record it either.
+
+**prusa-slicer-beta** tracks PrusaSlicer pre-releases (alphas, betas, and release candidates) from the [prusa3d/PrusaSlicer](https://github.com/prusa3d/PrusaSlicer) GitHub repository. Pre-releases are interleaved with stable releases in the API's ordering, so the updater collects every pre-release that ships a `PrusaSlicer-<version>.dmg` asset and takes the most recently published one. To update to the latest pre-release:
+
+```
+nix run .#update-prusa-slicer-beta
+```
+
+This queries the GitHub releases API, finds the newest qualifying pre-release, prefetches the macOS `.dmg` hash, and rewrites `pkgs/prusa-slicer-beta/default.nix`.
+
+Only macOS is packaged. Starting with the 3.0.0 series, Prusa Research distributes PrusaSlicer on Linux exclusively through Flathub and publishes no AppImage or tarball, with the pre-release channel living in the separate `flathub-beta` remote. On Linux, install it with `flatpak remote-add --if-not-exists flathub-beta https://dl.flathub.org/beta-repo/flathub-beta.flatpakrepo` followed by `flatpak install flathub-beta com.prusa3d.PrusaSlicer`. Note that the pre-release is only available once Prusa Research promotes it to that remote; the alpha builds are prepared on per-version branches of the [flathub/com.prusa3d.PrusaSlicer](https://github.com/flathub/com.prusa3d.PrusaSlicer) repository first.
+
+Pre-releases in the 3.x series store their configuration in `PrusaSlicer3-dev`, so this package can be installed alongside the stable nixpkgs `prusa-slicer` package without the two interfering.
 
 **whispering** tracks Whispering releases from the
 [EpicenterHQ/epicenter](https://github.com/EpicenterHQ/epicenter) monorepo.  The

@@ -45,6 +45,7 @@
       // nixpkgs.lib.optionalAttrs (system == "aarch64-darwin") {
         ds4 = pkgs.callPackage ./pkgs/ds4 { };
         h3c = pkgs.callPackage ./pkgs/h3c { };
+        prusa-slicer-beta = pkgs.callPackage ./pkgs/prusa-slicer-beta { };
         vibe = pkgs.callPackage ./pkgs/vibe { };
       }
       // {
@@ -996,6 +997,104 @@
         # Finds the newest date+SHA release tag (excluding the rolling "latest"
         # tag), fetches a fresh hash for the macOS ARM64 zip, and rewrites the
         # derivation. Must be run from the root of the flake checkout.
+        # Selects the newest PrusaSlicer pre-release (alpha, beta, or release
+        # candidate) that ships a macOS .dmg.  GitHub's release list is
+        # ordered by creation date and interleaves stable releases with
+        # pre-releases, so the newest pre-release is not reliably the first
+        # entry; every candidate is collected and the most recently published
+        # one is chosen.  Only the macOS artifact is prefetched because Prusa
+        # Research publishes no standalone Linux build for the pre-release
+        # channel.  Must be run from the root of the flake checkout.
+        updatePrusaSlicerBetaScript = pkgs.writeText "update-prusa-slicer-beta.py" ''
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+          import urllib.request
+
+          DERIVATION = "pkgs/prusa-slicer-beta/default.nix"
+          RELEASES_API = "https://api.github.com/repos/prusa3d/PrusaSlicer/releases?per_page=30"
+          TAG_PATTERN = re.compile(r"^version_(.+)$")
+
+          if not os.path.exists(DERIVATION):
+              print("error: run this script from the root of the flake", file=sys.stderr)
+              sys.exit(1)
+
+          print("Fetching prusa3d/PrusaSlicer release list...")
+          request = urllib.request.Request(
+              RELEASES_API,
+              headers={"Accept": "application/vnd.github+json", "User-Agent": "nix-update-prusa-slicer-beta"},
+          )
+
+          with urllib.request.urlopen(request) as response:
+              releases = json.load(response)
+
+          candidates = []
+          for release in releases:
+              if not release.get("prerelease"):
+                  continue
+
+              match = TAG_PATTERN.match(release.get("tag_name", ""))
+              if not match:
+                  continue
+
+              # The asset name is the only thing that ties a release to the
+              # download URL the derivation builds, so a release without the
+              # .dmg is not a usable candidate even if its tag looks right.
+              candidate = match.group(1)
+              names = [asset.get("name", "") for asset in release.get("assets", [])]
+              if f"PrusaSlicer-{candidate}.dmg" in names:
+                  candidates.append((release.get("published_at", ""), candidate))
+
+          if not candidates:
+              print("error: could not determine latest PrusaSlicer pre-release", file=sys.stderr)
+              sys.exit(1)
+
+          latest = max(candidates)[1]
+
+          with open(DERIVATION) as f:
+              content = f.read()
+
+          current_match = re.search(r'version = "([^"]+)"', content)
+          if not current_match:
+              print("error: could not find current version in derivation", file=sys.stderr)
+              sys.exit(1)
+
+          current = current_match.group(1)
+          print(f"Current: {current}  Latest: {latest}")
+
+          if current == latest:
+              print("Already up to date.")
+              sys.exit(0)
+
+          url = f"https://github.com/prusa3d/PrusaSlicer/releases/download/version_{latest}/PrusaSlicer-{latest}.dmg"
+          print("Fetching macOS aarch64 .dmg hash...")
+          result = subprocess.run(
+              ["nix", "store", "prefetch-file", url],
+              capture_output=True, text=True
+          )
+          match = re.search(r"hash '([^']+)'", result.stdout + result.stderr)
+          if not match:
+              print(f"error: could not fetch hash for {url}", file=sys.stderr)
+              print(result.stdout + result.stderr, file=sys.stderr)
+              sys.exit(1)
+
+          content = content.replace(f'version = "{current}"', f'version = "{latest}"', 1)
+          content = re.sub(
+              r'(hash = ")[^"]+(")',
+              lambda m: m.group(1) + match.group(1) + m.group(2),
+              content,
+              count=1,
+          )
+
+          with open(DERIVATION, "w") as f:
+              f.write(content)
+
+          print(f"Updated {DERIVATION} from {current} to {latest}.")
+          print("Stage the change with: git add pkgs/prusa-slicer-beta/default.nix")
+        '';
+
         updateVibeScript = pkgs.writeText "update-vibe.py" ''
           import json
           import re
@@ -1493,6 +1592,13 @@
           '');
         };
 
+        update-prusa-slicer-beta = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "update-prusa-slicer-beta" ''
+            exec ${pkgs.python3}/bin/python3 ${updatePrusaSlicerBetaScript}
+          '');
+        };
+
         update-textgen = {
           type = "app";
           program = toString (pkgs.writeShellScript "update-textgen" ''
@@ -1527,7 +1633,7 @@
           program = toString (pkgs.writeShellScript "update-all" ''
             failed=""
 
-            for app in update-actual-cli update-deadbranch update-ds4 update-fastmail update-fastmail-cli update-fastmail-rules-cli update-freecad-weekly update-godot-dev update-h3c update-msty-studio update-orion-browser update-textgen update-unsloth-desktop update-vibe update-whispering; do
+            for app in update-actual-cli update-deadbranch update-ds4 update-fastmail update-fastmail-cli update-fastmail-rules-cli update-freecad-weekly update-godot-dev update-h3c update-msty-studio update-orion-browser update-prusa-slicer-beta update-textgen update-unsloth-desktop update-vibe update-whispering; do
               echo "=== Running $app ==="
               if nix run .#"$app"; then
                 echo "=== $app completed successfully ==="
