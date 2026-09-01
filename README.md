@@ -15,6 +15,7 @@ A personal Nix flake containing packages not yet available in nixpkgs. The goal 
 | `freecad-weekly`   | FreeCAD pre-release builds (RC and weekly), wrapped from the official AppImage            |
 | `godot-dev`        | Godot game engine development/beta/RC builds (pre-built binary)                          |
 | `godot-dev-mono`   | Godot game engine development/beta/RC builds with C#/.NET support (pre-built binary)     |
+| `h3c`              | MiniMax H3 text-to-video/audio inference engine (Metal, aarch64-darwin only, binary: `h3`) |
 | `msty-studio`      | Desktop application for running and managing local AI models                              |
 | `orion-browser`    | Web browser built by Kagi, using WebKitGTK (early beta, x86_64-linux only)               |
 | `textgen`          | Local LLM inference UI — CPU default (Linux x86_64) or ARM64 (macOS)                     |
@@ -166,6 +167,19 @@ nix run .#update-ds4
 
 This queries the GitHub branches API, determines the current HEAD SHA and date,
 prefetches the source tarball hash, and rewrites `pkgs/ds4/default.nix`.
+
+**h3c** packages [antirez/h3.c](https://github.com/antirez/h3.c) (upstream project name "h3-metal"), a native MiniMax-H3 text-to-video/audio inference engine for Apple Silicon. It tracks the latest commit on `main`, aarch64-darwin only. The project has no releases yet, so the pinned commit serves as the version.
+
+Two sets of compat headers bridge the gap between nixpkgs' macOS SDK 14.4 and newer Metal / MetalPerformanceShadersGraph APIs used by h3.c: `MTLCompileOptions.mathMode` and `MTLGPUFamilyMetal4` (SDK 15.0/26.0), and MPSGraph's scaled-dot-product-attention selectors (SDK 15.0). Upstream's own `@available` and `respondsToSelector:` guards mean the stubs are never exercised on systems that lack the real symbols. Separately, the tokenizer needs ICU's `unicode/uchar.h` and links against Apple's private `-licucore`, neither of which nixpkgs' apple-sdk provides; the derivation substitutes nixpkgs' own `icu4c` instead. The Metal shader source (`h3_shaders.metal`) is loaded from the process's working directory at runtime, so it's shipped in `$out/share/h3c/` with a wrapper script that sets the working directory before exec'ing the binary. `ffmpeg`/`ffprobe`, invoked by name via `PATH` lookup for media I/O, are prepended to the wrapper's `PATH`.
+
+To update to the latest commit:
+
+```
+nix run .#update-h3c
+```
+
+This queries the GitHub branches API, determines the current HEAD SHA and date,
+prefetches the source tarball hash, and rewrites `pkgs/h3c/default.nix`.
 
 **godot-dev** and **godot-dev-mono** track pre-release builds from the
 [godot-builds](https://github.com/godotengine/godot-builds) GitHub repository.

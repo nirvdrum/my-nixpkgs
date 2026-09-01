@@ -44,6 +44,7 @@
       }
       // nixpkgs.lib.optionalAttrs (system == "aarch64-darwin") {
         ds4 = pkgs.callPackage ./pkgs/ds4 { };
+        h3c = pkgs.callPackage ./pkgs/h3c { };
         vibe = pkgs.callPackage ./pkgs/vibe { };
       }
       // {
@@ -1161,6 +1162,92 @@
           print("Stage the change with: git add pkgs/ds4/default.nix")
         '';
 
+        # Queries the h3.c GitHub repository for the latest commit on main,
+        # prefetches the source hash, and rewrites the derivation with the
+        # new rev (full SHA) and version date. No releases exist yet, so we
+        # track HEAD of main. Must be run from the root of the flake checkout.
+        updateH3cScript = pkgs.writeText "update-h3c.py" ''
+          import json
+          import re
+          import subprocess
+          import sys
+          import os
+          import urllib.request
+
+          DERIVATION = "pkgs/h3c/default.nix"
+          BRANCH_API = "https://api.github.com/repos/antirez/h3.c/branches/main"
+
+          if not os.path.exists(DERIVATION):
+              print("error: run this script from the root of the flake", file=sys.stderr)
+              sys.exit(1)
+
+          print("Fetching h3.c latest commit...")
+          request = urllib.request.Request(
+              BRANCH_API,
+              headers={"Accept": "application/vnd.github+json", "User-Agent": "nix-update-h3c"},
+          )
+          with urllib.request.urlopen(request) as response:
+              branch = json.load(response)
+
+          latest_sha = branch["commit"]["sha"]
+          latest_date = branch["commit"]["commit"]["committer"]["date"][:10]
+          latest_version = f"unstable-{latest_date}"
+
+          with open(DERIVATION) as f:
+              content = f.read()
+
+          current_rev = re.search(r'rev = "([^"]+)"', content).group(1)
+          current_version = re.search(r'version = "([^"]+)"', content).group(1)
+          print(f"Current: {current_version} ({current_rev[:7]})")
+          print(f"Latest:  {latest_version} ({latest_sha[:7]})")
+
+          if current_rev == latest_sha:
+              print("Already up to date.")
+              sys.exit(0)
+
+          # fetchFromGitHub is a fetchzip derivation: its hash covers the
+          # unpacked source tree, not the raw tarball bytes. nix-prefetch-url
+          # --unpack computes the former; nix store prefetch-file would
+          # compute the latter, producing a hash that never matches the build.
+          archive_url = f"https://github.com/antirez/h3.c/archive/{latest_sha}.tar.gz"
+          print("Prefetching source hash...")
+          result = subprocess.run(
+              ["nix-prefetch-url", "--unpack", archive_url],
+              capture_output=True, text=True
+          )
+          base32_hash = result.stdout.strip().splitlines()[-1] if result.stdout.strip() else ""
+          if not base32_hash or result.returncode != 0:
+              print(f"error: could not fetch hash for {archive_url}", file=sys.stderr)
+              print(result.stdout + result.stderr, file=sys.stderr)
+              sys.exit(1)
+
+          # nix-prefetch-url emits the legacy base32 encoding; convert it to
+          # the SRI format used throughout this flake.
+          result = subprocess.run(
+              ["nix", "hash", "convert", "--hash-algo", "sha256", "--to", "sri", base32_hash],
+              capture_output=True, text=True
+          )
+          new_hash = result.stdout.strip().splitlines()[-1] if result.stdout.strip() else ""
+          if not new_hash.startswith("sha256-"):
+              print("error: could not convert hash to SRI format", file=sys.stderr)
+              print(result.stdout + result.stderr, file=sys.stderr)
+              sys.exit(1)
+
+          content = content.replace(f'version = "{current_version}"', f'version = "{latest_version}"', 1)
+          content = content.replace(f'rev = "{current_rev}"', f'rev = "{latest_sha}"', 1)
+          content = re.sub(
+              r'(hash = ")[^"]+(")',
+              lambda m: m.group(1) + new_hash + m.group(2),
+              content
+          )
+
+          with open(DERIVATION, "w") as f:
+              f.write(content)
+
+          print(f"Updated {DERIVATION} from {current_version} to {latest_version}.")
+          print("Stage the change with: git add pkgs/h3c/default.nix")
+        '';
+
         # Resolves the commit that Kagi's Flatpak repository currently exposes
         # for the Orion beta ref, and rewrites the derivation with that commit,
         # its version, and its output hash.
@@ -1369,6 +1456,13 @@
           '');
         };
 
+        update-h3c = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "update-h3c" ''
+            exec ${pkgs.python3}/bin/python3 ${updateH3cScript}
+          '');
+        };
+
         update-freecad-weekly = {
           type = "app";
           program = toString (pkgs.writeShellScript "update-freecad-weekly" ''
@@ -1433,7 +1527,7 @@
           program = toString (pkgs.writeShellScript "update-all" ''
             failed=""
 
-            for app in update-actual-cli update-deadbranch update-ds4 update-fastmail update-fastmail-cli update-fastmail-rules-cli update-freecad-weekly update-godot-dev update-msty-studio update-orion-browser update-textgen update-unsloth-desktop update-vibe update-whispering; do
+            for app in update-actual-cli update-deadbranch update-ds4 update-fastmail update-fastmail-cli update-fastmail-rules-cli update-freecad-weekly update-godot-dev update-h3c update-msty-studio update-orion-browser update-textgen update-unsloth-desktop update-vibe update-whispering; do
               echo "=== Running $app ==="
               if nix run .#"$app"; then
                 echo "=== $app completed successfully ==="
