@@ -54,7 +54,7 @@
 }:
 
 let
-  version = "0.4.1";
+  version = "0.4.2";
 
   # Kagi no longer publishes a versioned .flatpak bundle for each release; the
   # only distribution channel is their Flatpak repository, which is a plain
@@ -62,7 +62,7 @@ let
   # so the fetch stays reproducible as the `beta` ref advances.
   ostreeUrl = "https://flatpak.orionbrowser.com/repo/beta/";
   ostreeRef = "app/com.kagi.Orion/x86_64/beta";
-  ostreeCommit = "34e7167b0cd363a8061593c7f097b7e611d10752274543af75c8907a67204947";
+  ostreeCommit = "9d52c5f0c66b4b2117ca0a4e4df8fbb7e4a60000d3624dc71205da1ec818798d";
 
   src = stdenvNoCC.mkDerivation {
     pname = "orion-browser-source";
@@ -108,7 +108,7 @@ let
 
     outputHashMode = "recursive";
     outputHashAlgo = "sha256";
-    outputHash = "sha256-vTlbxDwR0QCSXG030h1TJJU77l/KrDvcKOSBDYeq4EY=";
+    outputHash = "sha256-K9BHqYr6TOdTfmo1B97cx9JTjXwsboRSG7c9qToSVHs=";
   };
 in
 stdenv.mkDerivation {
