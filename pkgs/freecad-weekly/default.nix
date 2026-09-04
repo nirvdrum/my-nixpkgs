@@ -8,7 +8,7 @@
 
 let
   pname = "freecad-weekly";
-  version = "2026.08.12";
+  version = "2026.09.02";
   tag = "weekly-${version}";
 in
 
@@ -16,7 +16,7 @@ if stdenvNoCC.hostPlatform.isLinux then
   let
     src = fetchurl {
       url = "https://github.com/FreeCAD/FreeCAD/releases/download/${tag}/FreeCAD_${tag}-Linux-x86_64.AppImage";
-      hash = "sha256-HWtSpevexjgmPCc86mr2IZS3b4HA4uch3Tr5R+l+0Pc=";
+      hash = "sha256-mPXh5opWbFOgsQmg+z1Div74rNXtA0kbipapYf8Tkag=";
     };
 
     appimageContents = appimageTools.extractType2 { inherit pname version src; };
@@ -46,7 +46,7 @@ else
 
     src = fetchurl {
       url = "https://github.com/FreeCAD/FreeCAD/releases/download/${tag}/FreeCAD_${tag}-macOS15-arm64.dmg";
-      hash = "sha256-F9A/+qyMluEkLLOa1FNicn0BF2saV9nI13zh+brk+WQ=";
+      hash = "sha256-TP7gBizSJkh4qD4q0bHTWDm5IRefrtsIxFR9jXrEGZY=";
     };
 
     nativeBuildInputs = [ undmg ];
