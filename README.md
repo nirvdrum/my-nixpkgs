@@ -21,6 +21,7 @@ A personal Nix flake containing packages not yet available in nixpkgs. The goal 
 | `textgen`          | Local LLM inference UI — CPU default (Linux x86_64) or ARM64 (macOS)                     |
 | `textgen-rocm`     | Local LLM inference UI — ROCm variant (Linux x86_64 only)                                |
 | `textgen-vulkan`   | Local LLM inference UI — Vulkan variant (Linux x86_64 only)                              |
+| `truenas-mcp`      | MCP server for monitoring and managing a TrueNAS system via an LLM                       |
 | `unsloth-desktop`  | Native desktop app for running and training LLMs and diffusion models locally            |
 | `vibe`             | Easy Linux virtual machine on macOS to sandbox LLM agents (aarch64-darwin only)           |
 | `whispering`       | Local-first speech-to-text: press shortcut, speak, get text (open source)                |
@@ -260,6 +261,17 @@ nix run .#update-unsloth-desktop
 ```
 
 This queries the GitHub releases API, finds the newest qualifying release, prefetches fresh hashes for both the Linux x86_64 AppImage and the macOS DMG, and rewrites `pkgs/unsloth-desktop/default.nix`.
+
+**truenas-mcp** tracks GitHub release tags from the [truenas/truenas-mcp repository](https://github.com/truenas/truenas-mcp).
+To update to the latest release:
+
+```
+nix run .#update-truenas-mcp
+```
+
+This uses `nix-update` under the hood. It queries the GitHub releases API, finds the newest
+`v*` tag, and rewrites the `version`, `src.hash`, and `vendorHash` fields in
+`pkgs/truenas-mcp/default.nix` automatically.
 
 ### Add a new package
 

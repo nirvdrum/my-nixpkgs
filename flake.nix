@@ -35,6 +35,7 @@
           libjxl = nixpkgs-stable.legacyPackages.${system}.libjxl;
         };
         textgen = pkgs.callPackage ./pkgs/textgen { };
+        truenas-mcp = pkgs.callPackage ./pkgs/truenas-mcp { };
         unsloth-desktop = pkgs.callPackage ./pkgs/unsloth-desktop { };
         whispering = pkgs.callPackage ./pkgs/whispering { };
       }
@@ -1500,6 +1501,13 @@
           '');
         };
 
+        update-truenas-mcp = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "update-truenas-mcp" ''
+            exec ${pkgs.nix-update}/bin/nix-update --flake truenas-mcp --version-regex 'v(.*)'
+          '');
+        };
+
 
         update-unsloth-desktop = {
           type = "app";
@@ -1527,7 +1535,7 @@
           program = toString (pkgs.writeShellScript "update-all" ''
             failed=""
 
-            for app in update-actual-cli update-deadbranch update-ds4 update-fastmail update-fastmail-cli update-fastmail-rules-cli update-freecad-weekly update-godot-dev update-h3c update-msty-studio update-orion-browser update-textgen update-unsloth-desktop update-vibe update-whispering; do
+            for app in update-actual-cli update-deadbranch update-ds4 update-fastmail update-fastmail-cli update-fastmail-rules-cli update-freecad-weekly update-godot-dev update-h3c update-msty-studio update-orion-browser update-textgen update-truenas-mcp update-unsloth-desktop update-vibe update-whispering; do
               echo "=== Running $app ==="
               if nix run .#"$app"; then
                 echo "=== $app completed successfully ==="
