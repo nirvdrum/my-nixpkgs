@@ -20,6 +20,7 @@
       in {
         actual-cli = pkgs.callPackage ./pkgs/actual-cli { };
         deadbranch = pkgs.callPackage ./pkgs/deadbranch { };
+        ds4 = pkgs.callPackage ./pkgs/ds4 { };
         fastmail = pkgs.callPackage ./pkgs/fastmail { };
         fastmail-cli = pkgs.callPackage ./pkgs/fastmail-cli { };
         fastmail-rules-cli = pkgs.callPackage ./pkgs/fastmail-rules-cli { };
@@ -44,7 +45,6 @@
         textgen-rocm = pkgs.callPackage ./pkgs/textgen { variant = "rocm"; };
       }
       // nixpkgs.lib.optionalAttrs (system == "aarch64-darwin") {
-        ds4 = pkgs.callPackage ./pkgs/ds4 { };
         h3c = pkgs.callPackage ./pkgs/h3c { };
         vibe = pkgs.callPackage ./pkgs/vibe { };
       }

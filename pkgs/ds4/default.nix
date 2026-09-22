@@ -1,25 +1,107 @@
-{ lib, stdenv, fetchFromGitHub, makeWrapper }:
+{
+  lib,
+  stdenv,
+  fetchFromGitHub,
+  makeWrapper,
+  rocmPackages,
+
+  # AMD GPU architecture to compile the ROCm kernels for on Linux. Upstream
+  # only targets Strix Halo (Radeon 8060S), so the default is gfx1151.
+  rocmArch ? "gfx1151",
+}:
 
 # DwarfStar is a native inference engine optimized for DeepSeek V4 Flash and PRO.
-# Primary target is Metal on macOS; CUDA is supported on Linux but not packaged here yet.
+# On macOS it uses Metal; on Linux it uses ROCm, targeting Strix Halo systems.
+# CUDA is supported upstream on Linux but is not packaged here.
 # The CPU-only path is provided for diagnostics only and is known to crash macOS kernels.
 let
   pname = "ds4";
   version = "unstable-2026-09-16";
+
+  src = fetchFromGitHub {
+    owner = "antirez";
+    repo = "ds4";
+    rev = "8db1d1d155cb0400a86a86b9c62d0defb3a6148b";
+    hash = "sha256-d0TRJH5/cNlDrgJy2i9eEUuSAlnka0BvxDXlXIwMwrE=";
+  };
+
+  binaries = [ "ds4" "ds4-server" "ds4-bench" "ds4-eval" "ds4-agent" ];
+
+  meta = {
+    description = "DeepSeek V4 Flash local inference engine for Metal, CUDA, and ROCm";
+    homepage = "https://github.com/antirez/ds4";
+    license = lib.licenses.mit;
+    platforms = [ "aarch64-darwin" "x86_64-linux" ];
+    maintainers = []; # add yourself if desired
+    mainProgram = "ds4";
+  };
 in
 
-if !stdenv.hostPlatform.isDarwin then
-  throw "ds4 currently only supports macOS (Metal backend). CUDA support may be added in the future."
+if stdenv.hostPlatform.isLinux then
+  let
+    rocmDeps = with rocmPackages; [
+      clr
+      hipblas-common
+      hipblas
+      hipblaslt
+      rocblas
+      rocwmma
+      hipcub
+      rocprim
+    ];
+
+    # hipcc drives ROCm's own clang rather than the nixpkgs-wrapped compiler,
+    # so it does not pick up include paths, library paths, or rpath entries
+    # from buildInputs. Pass them explicitly.
+    rocmIncludeFlags = map (dep: "-I${lib.getDev dep}/include") rocmDeps;
+    rocmLibraryPath = lib.makeLibraryPath rocmDeps;
+    rocmLinkFlags = map (dep: "-L${lib.getLib dep}/lib") rocmDeps
+      ++ [ "-Wl,-rpath,${rocmLibraryPath}" ];
+  in
+  stdenv.mkDerivation {
+    inherit pname version src meta;
+
+    nativeBuildInputs = [ rocmPackages.clr ];
+
+    buildInputs = rocmDeps;
+
+    # Override -march=native for portable host code. The GPU kernels are
+    # still compiled for a single architecture via ROCM_ARCH.
+    env.NATIVE_CPU_FLAG = "";
+
+    # The strix-halo target re-invokes make with the ROCm object set, compiler
+    # and link flags, so it is a build target rather than a set of variables.
+    # ROCM_CFLAGS and ROCM_LDLIBS mirror the Makefile defaults with the nix
+    # store paths appended; they are set through makeFlagsArray because their
+    # values contain spaces.
+    makeFlags = [
+      "strix-halo"
+      "HIPCC=hipcc"
+      "ROCM_ARCH=${rocmArch}"
+    ];
+
+    preBuild = ''
+      makeFlagsArray+=(
+        "ROCM_CFLAGS=-O3 -ffast-math -g -fno-finite-math-only -pthread -D__HIP_PLATFORM_AMD__ -Wno-unused-command-line-argument --offload-arch=${rocmArch} ${lib.concatStringsSep " " rocmIncludeFlags}"
+        "ROCM_LDLIBS=-lm -pthread ${lib.concatStringsSep " " rocmLinkFlags} -lhipblas -lhipblaslt -lrocblas"
+      )
+    '';
+
+    enableParallelBuilding = true;
+
+    installPhase = ''
+      runHook preInstall
+
+      for binary in ${lib.concatStringsSep " " binaries}; do
+        install -Dm755 "$binary" "$out/bin/$binary"
+      done
+
+      runHook postInstall
+    '';
+  }
 else
   stdenv.mkDerivation {
-    inherit pname version;
-
-    src = fetchFromGitHub {
-      owner = "antirez";
-      repo = "ds4";
-      rev = "8db1d1d155cb0400a86a86b9c62d0defb3a6148b";
-      hash = "sha256-d0TRJH5/cNlDrgJy2i9eEUuSAlnka0BvxDXlXIwMwrE=";
-    };
+    inherit pname version src meta;
 
     # Override -mcpu=native for portable binaries
     env.NATIVE_CPU_FLAG = "";
@@ -70,7 +152,7 @@ else
       install -d "$out/share/ds4/metal"
       cp metal/*.metal "$out/share/ds4/metal/"
 
-      for binary in ds4 ds4-server ds4-bench ds4-eval ds4-agent; do
+      for binary in ${lib.concatStringsSep " " binaries}; do
         install -Dm755 "$binary" "$out/libexec/$binary"
         makeWrapper "$out/libexec/$binary" "$out/bin/$binary" \
           --run "cd $out/share/ds4"
@@ -80,13 +162,4 @@ else
     '';
 
     nativeBuildInputs = [ makeWrapper ];
-
-    meta = {
-      description = "DeepSeek V4 Flash local inference engine for Metal and CUDA";
-      homepage = "https://github.com/antirez/ds4";
-      license = lib.licenses.mit;
-      platforms = lib.platforms.darwin;
-      maintainers = []; # add yourself if desired
-      mainProgram = "ds4";
-    };
   }

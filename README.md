@@ -8,10 +8,10 @@ A personal Nix flake containing packages not yet available in nixpkgs. The goal 
 |--------------------|------------------------------------------------------------------------------------------|
 | `actual-cli`       | Command-line interface for Actual Budget (binary: `actual`)                              |
 | `deadbranch`       | CLI tool for safely cleaning up stale git branches                                       |
+| `ds4`              | DeepSeek V4 Flash local inference engine (Metal on macOS, ROCm on Linux)                 |
 | `fastmail`         | CLI for Fastmail email, calendars, events, and todos via JMAP and CalDAV                 |
 | `fastmail-cli`     | Command-line interface for Fastmail using JMAP (binary: `fm`)                            |
 | `fastmail-rules-cli` | CLI for managing Fastmail mail rules and Sieve scripts via JMAP (binary: `fastmail-sieve`) |
-| `ds4`              | DeepSeek V4 Flash local inference engine (Metal, aarch64-darwin only)                    |
 | `freecad-weekly`   | FreeCAD pre-release builds (RC and weekly), wrapped from the official AppImage            |
 | `godot-dev`        | Godot game engine development/beta/RC builds (pre-built binary)                          |
 | `godot-dev-mono`   | Godot game engine development/beta/RC builds with C#/.NET support (pre-built binary)     |
@@ -156,9 +156,11 @@ finds the newest `v*` tag, and rewrites the `version` and `hash` fields in
 
 **ds4** tracks the latest commit on `main` branch from the [ds4 GitHub repository](https://github.com/antirez/ds4).
 
-Builds five Metal-backed binaries (ds4, ds4-server, ds4-agent, ds4-bench, ds4-eval) for aarch64-darwin from the upstream ds4 repository.  The project has no releases yet, so the pinned commit serves as the version.
+Builds five binaries (ds4, ds4-server, ds4-agent, ds4-bench, ds4-eval) from the upstream ds4 repository. On aarch64-darwin they use the Metal backend; on x86_64-linux they use the ROCm backend via upstream's `strix-halo` make target, compiled for Strix Halo (gfx1151) by default. The project has no releases yet, so the pinned commit serves as the version.
 
-A compat header bridges the gap between nixpkgs' macOS SDK 14.4 and the macOS 15.0 Metal APIs used by ds4 (MTLResidencySetDescriptor, MTLMathModeSafe, missing protocol selectors). Metal shader source files are shipped in $out/share/ds4/metal/ with wrapper scripts that set the working directory so the engine finds them at runtime.
+On macOS, a compat header bridges the gap between nixpkgs' macOS SDK 14.4 and the macOS 15.0 Metal APIs used by ds4 (MTLResidencySetDescriptor, MTLMathModeSafe, missing protocol selectors). Metal shader source files are shipped in $out/share/ds4/metal/ with wrapper scripts that set the working directory so the engine finds them at runtime.
+
+On Linux, the ROCm toolchain and libraries (HIP, hipBLAS, hipBLASLt, rocBLAS, rocWMMA, hipCUB) come from nixpkgs' `rocmPackages`. Because hipcc drives ROCm's own clang rather than the nixpkgs-wrapped compiler, the derivation passes include paths, library paths, and an rpath explicitly. The GPU target can be changed with the `rocmArch` argument (e.g. `pkgs.callPackage ./pkgs/ds4 { rocmArch = "gfx1100"; }`), though upstream only tests gfx1151.
 
 To update to the latest commit:
 
