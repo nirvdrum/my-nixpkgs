@@ -135,6 +135,22 @@ if stdenvNoCC.hostPlatform.isLinux then
       # which by construction cannot see a GGUF model held by a separate
       # llama.cpp process, and so reads near zero however full the card is.
       pkgs.rocmPackages.amdsmi
+
+      # The backend also runs rocminfo to detect the GPU architecture, and
+      # falls back to guessing when it is missing ("Could not detect ROCm GPU
+      # architecture"). The guess has been right so far, but the warning is
+      # logged on every launch and the real answer is cheap to provide.
+      pkgs.rocmPackages.rocminfo
+
+      # Triton, which Unsloth relies on for its GPU kernels, compiles a small C
+      # extension for its AMD driver at runtime and looks for clang, gcc, or cc
+      # on PATH to do so. Nothing else in the FHS environment provides one, so
+      # any code path that reaches Triton, such as text-to-speech generation,
+      # fails with "Failed to find C compiler" on a host without a system-wide
+      # compiler. The extension is built against the venv interpreter's own
+      # headers and the HIP runtime shipped in the ROCm wheels, so the wrapper
+      # compiler from nixpkgs is sufficient.
+      pkgs.gcc
     ];
 
     # Exporting LD_LIBRARY_PATH here covers everything that runs inside the FHS
