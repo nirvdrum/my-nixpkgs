@@ -4,27 +4,29 @@ A personal Nix flake containing packages not yet available in nixpkgs. The goal 
 
 ## Packages
 
-| Name               | Description                                                                              |
-|--------------------|------------------------------------------------------------------------------------------|
-| `actual-cli`       | Command-line interface for Actual Budget (binary: `actual`)                              |
-| `deadbranch`       | CLI tool for safely cleaning up stale git branches                                       |
-| `ds4`              | DeepSeek V4 Flash local inference engine (Metal on macOS, ROCm on Linux)                 |
-| `fastmail`         | CLI for Fastmail email, calendars, events, and todos via JMAP and CalDAV                 |
-| `fastmail-cli`     | Command-line interface for Fastmail using JMAP (binary: `fm`)                            |
-| `fastmail-rules-cli` | CLI for managing Fastmail mail rules and Sieve scripts via JMAP (binary: `fastmail-sieve`) |
-| `freecad-weekly`   | FreeCAD pre-release builds (RC and weekly), wrapped from the official AppImage            |
-| `godot-dev`        | Godot game engine development/beta/RC builds (pre-built binary)                          |
-| `godot-dev-mono`   | Godot game engine development/beta/RC builds with C#/.NET support (pre-built binary)     |
-| `h3c`              | MiniMax H3 text-to-video/audio inference engine (Metal, aarch64-darwin only, binary: `h3`) |
-| `msty-studio`      | Desktop application for running and managing local AI models                              |
-| `orion-browser`    | Web browser built by Kagi, using WebKitGTK (early beta, x86_64-linux only)               |
-| `textgen`          | Local LLM inference UI — CPU default (Linux x86_64) or ARM64 (macOS)                     |
-| `textgen-rocm`     | Local LLM inference UI — ROCm variant (Linux x86_64 only)                                |
-| `textgen-vulkan`   | Local LLM inference UI — Vulkan variant (Linux x86_64 only)                              |
-| `truenas-mcp`      | MCP server for monitoring and managing a TrueNAS system via an LLM                       |
-| `unsloth-desktop`  | Native desktop app for running and training LLMs and diffusion models locally            |
-| `vibe`             | Easy Linux virtual machine on macOS to sandbox LLM agents (aarch64-darwin only)           |
-| `whispering`       | Local-first speech-to-text: press shortcut, speak, get text (open source)                |
+| Name                     | Description                                                                                |
+|--------------------------|--------------------------------------------------------------------------------------------|
+| `actual-cli`             | Command-line interface for Actual Budget (binary: `actual`)                                |
+| `deadbranch`             | CLI tool for safely cleaning up stale git branches                                         |
+| `ds4`                    | DeepSeek V4 Flash local inference engine (Metal on macOS, ROCm on Linux)                   |
+| `fastmail`               | CLI for Fastmail email, calendars, events, and todos via JMAP and CalDAV                   |
+| `fastmail-cli`           | Command-line interface for Fastmail using JMAP (binary: `fm`)                              |
+| `fastmail-rules-cli`     | CLI for managing Fastmail mail rules and Sieve scripts via JMAP (binary: `fastmail-sieve`) |
+| `freecad-weekly`         | FreeCAD pre-release builds (RC and weekly), wrapped from the official AppImage             |
+| `godot-dev`              | Godot game engine development/beta/RC builds (pre-built binary)                            |
+| `godot-dev-mono`         | Godot game engine development/beta/RC builds with C#/.NET support (pre-built binary)       |
+| `h3c`                    | MiniMax H3 text-to-video/audio inference engine (Metal, aarch64-darwin only, binary: `h3`) |
+| `msty-studio`            | Desktop application for running and managing local AI models                               |
+| `orion-browser`          | Web browser built by Kagi, using WebKitGTK (early beta, x86_64-linux only)                 |
+| `strix-llama-cpp-rocm`   | llama.cpp fork optimized for AMD Strix Halo — ROCm variant (Linux x86_64 only)             |
+| `strix-llama-cpp-vulkan` | llama.cpp fork optimized for AMD Strix Halo — Vulkan variant (Linux x86_64 only)           |
+| `textgen`                | Local LLM inference UI — CPU default (Linux x86_64) or ARM64 (macOS)                       |
+| `textgen-rocm`           | Local LLM inference UI — ROCm variant (Linux x86_64 only)                                  |
+| `textgen-vulkan`         | Local LLM inference UI — Vulkan variant (Linux x86_64 only)                                |
+| `truenas-mcp`            | MCP server for monitoring and managing a TrueNAS system via an LLM                         |
+| `unsloth-desktop`        | Native desktop app for running and training LLMs and diffusion models locally              |
+| `vibe`                   | Easy Linux virtual machine on macOS to sandbox LLM agents (aarch64-darwin only)            |
+| `whispering`             | Local-first speech-to-text: press shortcut, speak, get text (open source)                  |
 
 ## Common tasks
 
@@ -199,6 +201,18 @@ and mono variants on both Linux x86_64 and macOS (universal binary), and rewrite
 
 > **Note:** When a new major development cycle begins (e.g., 4.8), update the
 > `baseVersion` field in the derivation manually before running the update script.
+
+**strix-llama-cpp-vulkan** and **strix-llama-cpp-rocm** build [halo-box/strix-llama.cpp](https://github.com/halo-box/strix-llama.cpp), a llama.cpp fork tuned for AMD Strix Halo (gfx1151), from source. The fork recommends the Vulkan (RADV) backend as the default on this hardware. The ROCm variant compiles its HIP kernels for gfx1151 only (override with the `rocmGpuTargets` argument), and its executables default `HIP_LAUNCH_BLOCKING=1` because the fork's HIP path needs serialized kernel launches for correct output on gfx1151. The fork's tags lag its optimization work by weeks, so both variants track the head of `master`.
+
+The derivation is standalone rather than an override of nixpkgs' `llama-cpp`, because the consuming configuration substitutes its own nixpkgs and the `llama-cpp` recipe's internals differ between revisions. The CPU backend is built for every x86-64 level and selected at runtime, and all backends are loadable modules beside the executables in `bin/`, which is the layout Unsloth Studio expects when pointed at a custom llama.cpp directory.
+
+To update to the latest commit:
+
+```
+nix run .#update-strix-llama-cpp
+```
+
+This queries the GitHub branches API for the current HEAD SHA and date, counts the commits to derive llama.cpp's build number, prefetches the source tarball hash, fetches the web UI's npm dependencies to obtain their hash, and rewrites `pkgs/strix-llama-cpp/default.nix`.
 
 **textgen** tracks release tags from the [oobabooga/textgen](https://github.com/oobabooga/textgen) GitHub
 repository.  To update to the latest release:

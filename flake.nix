@@ -41,6 +41,8 @@
         whispering = pkgs.callPackage ./pkgs/whispering { };
       }
       // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
+        strix-llama-cpp-rocm = pkgs.callPackage ./pkgs/strix-llama-cpp { variant = "rocm"; };
+        strix-llama-cpp-vulkan = pkgs.callPackage ./pkgs/strix-llama-cpp { variant = "vulkan"; };
         textgen-vulkan = pkgs.callPackage ./pkgs/textgen { variant = "vulkan"; };
         textgen-rocm = pkgs.callPackage ./pkgs/textgen { variant = "rocm"; };
       }
@@ -1163,6 +1165,122 @@
           print("Stage the change with: git add pkgs/ds4/default.nix")
         '';
 
+        # Queries the halo-box/strix-llama.cpp GitHub repository for the
+        # latest commit on master and rewrites the derivation with the new
+        # rev, version date, source hash, build number, and npm dependency
+        # hash. The fork's tags lag its optimization work by weeks, so we
+        # track the head of master. Must be run from the root of the flake
+        # checkout.
+        updateStrixLlamaCppScript = pkgs.writeText "update-strix-llama-cpp.py" ''
+          import json
+          import re
+          import subprocess
+          import sys
+          import os
+          import urllib.request
+
+          DERIVATION = "pkgs/strix-llama-cpp/default.nix"
+          REPO_API = "https://api.github.com/repos/halo-box/strix-llama.cpp"
+          HEADERS = {"Accept": "application/vnd.github+json", "User-Agent": "nix-update-strix-llama-cpp"}
+
+          if not os.path.exists(DERIVATION):
+              print("error: run this script from the root of the flake", file=sys.stderr)
+              sys.exit(1)
+
+          print("Fetching strix-llama.cpp latest commit...")
+          request = urllib.request.Request(f"{REPO_API}/branches/master", headers=HEADERS)
+          with urllib.request.urlopen(request) as response:
+              branch = json.load(response)
+
+          latest_sha = branch["commit"]["sha"]
+          latest_date = branch["commit"]["commit"]["committer"]["date"][:10]
+          latest_version = f"unstable-{latest_date}"
+
+          with open(DERIVATION) as f:
+              content = f.read()
+
+          current_rev = re.search(r'rev = "([^"]+)"', content).group(1)
+          current_version = re.search(r'version = "([^"]+)"', content).group(1)
+          print(f"Current: {current_version} ({current_rev[:7]})")
+          print(f"Latest:  {latest_version} ({latest_sha[:7]})")
+
+          if current_rev == latest_sha:
+              print("Already up to date.")
+              sys.exit(0)
+
+          # llama.cpp's build number is the commit count, which upstream reads
+          # from git history that a GitHub archive does not carry. Requesting
+          # one commit per page makes the page number of the "last" link in
+          # the pagination header equal to that count.
+          print("Counting commits for the build number...")
+          request = urllib.request.Request(
+              f"{REPO_API}/commits?sha={latest_sha}&per_page=1", headers=HEADERS
+          )
+          with urllib.request.urlopen(request) as response:
+              link = response.headers.get("Link") or ""
+          last_page = re.search(r'[?&]page=(\d+)>; rel="last"', link)
+          build_number = last_page.group(1) if last_page else "1"
+
+          # fetchFromGitHub is a fetchzip derivation: its hash covers the
+          # unpacked source tree, not the raw tarball bytes. nix-prefetch-url
+          # --unpack computes the former; nix store prefetch-file would
+          # compute the latter, producing a hash that never matches the build.
+          archive_url = f"https://github.com/halo-box/strix-llama.cpp/archive/{latest_sha}.tar.gz"
+          print("Prefetching source hash...")
+          result = subprocess.run(
+              ["nix-prefetch-url", "--unpack", archive_url],
+              capture_output=True, text=True
+          )
+          base32_hash = result.stdout.strip().splitlines()[-1] if result.stdout.strip() else ""
+          if not base32_hash or result.returncode != 0:
+              print(f"error: could not fetch hash for {archive_url}", file=sys.stderr)
+              print(result.stdout + result.stderr, file=sys.stderr)
+              sys.exit(1)
+
+          # nix-prefetch-url emits the legacy base32 encoding; convert it to
+          # the SRI format used throughout this flake.
+          result = subprocess.run(
+              ["nix", "hash", "convert", "--hash-algo", "sha256", "--to", "sri", base32_hash],
+              capture_output=True, text=True
+          )
+          new_hash = result.stdout.strip().splitlines()[-1] if result.stdout.strip() else ""
+          if not new_hash.startswith("sha256-"):
+              print("error: could not convert hash to SRI format", file=sys.stderr)
+              print(result.stdout + result.stderr, file=sys.stderr)
+              sys.exit(1)
+
+          content = content.replace(f'version = "{current_version}"', f'version = "{latest_version}"', 1)
+          content = content.replace(f'rev = "{current_rev}"', f'rev = "{latest_sha}"', 1)
+          content = re.sub(r'(\n    hash = ")[^"]+(")', lambda m: m.group(1) + new_hash + m.group(2), content, count=1)
+          content = re.sub(r'(buildNumber = ")[^"]+(")', lambda m: m.group(1) + build_number + m.group(2), content, count=1)
+
+          # The web UI's npm dependencies change far less often than the
+          # source, but there is no way to tell without fetching them. Clear
+          # the hash and let the fixed-output derivation report the real one.
+          # Only the dependency fetch is built, not llama.cpp itself.
+          content = re.sub(r'(npmDepsHash = ")[^"]*(")', r"\1\2", content, count=1)
+          with open(DERIVATION, "w") as f:
+              f.write(content)
+
+          print("Building the npm dependencies to obtain their hash...")
+          result = subprocess.run(
+              ["nix", "build", "--no-link", ".#strix-llama-cpp-vulkan.npmDeps"],
+              capture_output=True, text=True
+          )
+          npm_hash_match = re.search(r"got:\s+(sha256-[A-Za-z0-9+/=]+)", result.stdout + result.stderr)
+          if not npm_hash_match:
+              print("error: could not determine the npm dependency hash", file=sys.stderr)
+              print(result.stdout + result.stderr, file=sys.stderr)
+              sys.exit(1)
+
+          content = content.replace('npmDepsHash = ""', f'npmDepsHash = "{npm_hash_match.group(1)}"', 1)
+          with open(DERIVATION, "w") as f:
+              f.write(content)
+
+          print(f"Updated {DERIVATION} from {current_version} to {latest_version} (build {build_number}).")
+          print("Stage the change with: git add pkgs/strix-llama-cpp/default.nix")
+        '';
+
         # Queries the h3.c GitHub repository for the latest commit on main,
         # prefetches the source hash, and rewrites the derivation with the
         # new rev (full SHA) and version date. No releases exist yet, so we
@@ -1494,6 +1612,13 @@
           '');
         };
 
+        update-strix-llama-cpp = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "update-strix-llama-cpp" ''
+            exec ${pkgs.python3}/bin/python3 ${updateStrixLlamaCppScript}
+          '');
+        };
+
         update-textgen = {
           type = "app";
           program = toString (pkgs.writeShellScript "update-textgen" ''
@@ -1535,7 +1660,7 @@
           program = toString (pkgs.writeShellScript "update-all" ''
             failed=""
 
-            for app in update-actual-cli update-deadbranch update-ds4 update-fastmail update-fastmail-cli update-fastmail-rules-cli update-freecad-weekly update-godot-dev update-h3c update-msty-studio update-orion-browser update-textgen update-truenas-mcp update-unsloth-desktop update-vibe update-whispering; do
+            for app in update-actual-cli update-deadbranch update-ds4 update-fastmail update-fastmail-cli update-fastmail-rules-cli update-freecad-weekly update-godot-dev update-h3c update-msty-studio update-orion-browser update-strix-llama-cpp update-textgen update-truenas-mcp update-unsloth-desktop update-vibe update-whispering; do
               echo "=== Running $app ==="
               if nix run .#"$app"; then
                 echo "=== $app completed successfully ==="
