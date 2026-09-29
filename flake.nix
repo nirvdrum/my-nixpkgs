@@ -39,6 +39,7 @@
         truenas-mcp = pkgs.callPackage ./pkgs/truenas-mcp { };
         unsloth-desktop = pkgs.callPackage ./pkgs/unsloth-desktop { };
         whispering = pkgs.callPackage ./pkgs/whispering { };
+        wyoming-openai = pkgs.callPackage ./pkgs/wyoming-openai { };
       }
       // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
         strix-llama-cpp-rocm = pkgs.callPackage ./pkgs/strix-llama-cpp { variant = "rocm"; };
@@ -1281,6 +1282,61 @@
           print("Stage the change with: git add pkgs/strix-llama-cpp/default.nix")
         '';
 
+        # Queries PyPI for the newest wyoming-openai release and rewrites the
+        # version and wheel hash in its derivation. The sentence splitter and
+        # its two helper libraries are pinned separately in the same file and
+        # only need bumping when a new wyoming-openai release requires it.
+        # Must be run from the root of the flake checkout.
+        updateWyomingOpenaiScript = pkgs.writeText "update-wyoming-openai.py" ''
+          import base64
+          import json
+          import re
+          import sys
+          import os
+          import urllib.request
+
+          DERIVATION = "pkgs/wyoming-openai/default.nix"
+
+          if not os.path.exists(DERIVATION):
+              print("error: run this script from the root of the flake", file=sys.stderr)
+              sys.exit(1)
+
+          with urllib.request.urlopen("https://pypi.org/pypi/wyoming-openai/json") as response:
+              release = json.load(response)
+
+          latest = release["info"]["version"]
+          wheels = [u for u in release["urls"] if u["packagetype"] == "bdist_wheel"]
+          if not wheels:
+              print(f"error: wyoming-openai {latest} has no wheel on PyPI", file=sys.stderr)
+              sys.exit(1)
+          sri = "sha256-" + base64.b64encode(bytes.fromhex(wheels[0]["digests"]["sha256"])).decode()
+
+          with open(DERIVATION) as f:
+              content = f.read()
+
+          # Only the wyoming_openai block is updated; the helper libraries
+          # above it keep their own versions and hashes.
+          start = content.index('pname = "wyoming_openai";')
+          block_end = content.index("pythonImportsCheck", start)
+          block = content[start:block_end]
+          current = re.search(r'version = "([^"]+)"', block).group(1)
+          print(f"Current: {current}")
+          print(f"Latest:  {latest}")
+          if current == latest:
+              print("Already up to date.")
+              sys.exit(0)
+
+          block = re.sub(r'version = "[^"]+"', f'version = "{latest}"', block, count=1)
+          block = re.sub(r'hash = "[^"]*"', f'hash = "{sri}"', block, count=1)
+          content = content[:start] + block + content[block_end:]
+          with open(DERIVATION, "w") as f:
+              f.write(content)
+
+          print(f"Updated {DERIVATION} from {current} to {latest}.")
+          print("Build it to check that the pinned dependencies still satisfy the new release.")
+          print("Stage the change with: git add pkgs/wyoming-openai/default.nix")
+        '';
+
         # Queries the h3.c GitHub repository for the latest commit on main,
         # prefetches the source hash, and rewrites the derivation with the
         # new rev (full SHA) and version date. No releases exist yet, so we
@@ -1655,12 +1711,19 @@
           '');
         };
 
+        update-wyoming-openai = {
+          type = "app";
+          program = toString (pkgs.writeShellScript "update-wyoming-openai" ''
+            exec ${pkgs.python3}/bin/python3 ${updateWyomingOpenaiScript}
+          '');
+        };
+
         update-all = {
           type = "app";
           program = toString (pkgs.writeShellScript "update-all" ''
             failed=""
 
-            for app in update-actual-cli update-deadbranch update-ds4 update-fastmail update-fastmail-cli update-fastmail-rules-cli update-freecad-weekly update-godot-dev update-h3c update-msty-studio update-orion-browser update-strix-llama-cpp update-textgen update-truenas-mcp update-unsloth-desktop update-vibe update-whispering; do
+            for app in update-actual-cli update-deadbranch update-ds4 update-fastmail update-fastmail-cli update-fastmail-rules-cli update-freecad-weekly update-godot-dev update-h3c update-msty-studio update-orion-browser update-strix-llama-cpp update-textgen update-truenas-mcp update-unsloth-desktop update-vibe update-whispering update-wyoming-openai; do
               echo "=== Running $app ==="
               if nix run .#"$app"; then
                 echo "=== $app completed successfully ==="

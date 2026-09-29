@@ -27,6 +27,7 @@ A personal Nix flake containing packages not yet available in nixpkgs. The goal 
 | `unsloth-desktop`        | Native desktop app for running and training LLMs and diffusion models locally              |
 | `vibe`                   | Easy Linux virtual machine on macOS to sandbox LLM agents (aarch64-darwin only)            |
 | `whispering`             | Local-first speech-to-text: press shortcut, speak, get text (open source)                  |
+| `wyoming-openai`         | Wyoming protocol proxy to OpenAI-compatible speech-to-text and text-to-speech APIs         |
 
 ## Common tasks
 
@@ -213,6 +214,16 @@ nix run .#update-strix-llama-cpp
 ```
 
 This queries the GitHub branches API for the current HEAD SHA and date, counts the commits to derive llama.cpp's build number, prefetches the source tarball hash, fetches the web UI's npm dependencies to obtain their hash, and rewrites `pkgs/strix-llama-cpp/default.nix`.
+
+**wyoming-openai** packages [wyoming_openai](https://github.com/roryeckel/wyoming_openai), which lets Home Assistant's voice pipeline use any speech server that speaks OpenAI's audio API, by translating between the Wyoming protocol and that API. Upstream publishes pure-Python wheels, which are used directly. Its sentence splitter, `yasbd-lib`, and that library's two dependencies not in nixpkgs, `retrie` and `radicli`, are defined in the same derivation, since nothing else needs them. Upstream pins exact dependency versions, which are relaxed so the newer `openai` in nixpkgs is accepted. The package defines no console script, so `wyoming-openai` is a small launcher that runs the module.
+
+To update to the latest release:
+
+```
+nix run .#update-wyoming-openai
+```
+
+This queries PyPI for the newest release and rewrites the version and wheel hash in `pkgs/wyoming-openai/default.nix`. Build the package afterwards to check that the pinned helper libraries still satisfy the new release.
 
 **textgen** tracks release tags from the [oobabooga/textgen](https://github.com/oobabooga/textgen) GitHub
 repository.  To update to the latest release:
