@@ -147,11 +147,20 @@
                   tar.extractall(tmp)
 
               src_dir = os.path.join(tmp, "package")
-              subprocess.run(
-                  [npm, "install", "--package-lock-only", "--omit=dev", "--no-audit", "--no-fund"],
-                  cwd=src_dir, check=True,
-                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-              )
+
+              # npm's output is captured to keep a successful run quiet, so it
+              # must be surfaced explicitly on failure. Otherwise, the only
+              # thing reported is a bare CalledProcessError traceback.
+              try:
+                  subprocess.run(
+                      [npm, "install", "--package-lock-only", "--omit=dev", "--no-audit", "--no-fund"],
+                      cwd=src_dir, check=True,
+                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                  )
+              except subprocess.CalledProcessError as e:
+                  print(e.output, file=sys.stderr)
+                  print("error: npm failed to generate package-lock.json", file=sys.stderr)
+                  sys.exit(1)
 
               with open(os.path.join(src_dir, "package-lock.json"), "rb") as src, open(lockfile, "wb") as dst:
                   dst.write(src.read())
@@ -1590,7 +1599,7 @@
             exec ${pkgs.python3}/bin/python3 ${updateActualCliScript} \
               pkgs/actual-cli/default.nix \
               pkgs/actual-cli/package-lock.json \
-              ${pkgs.nodejs_22}/bin/npm \
+              ${pkgs.nodejs}/bin/npm \
               ${pkgs.prefetch-npm-deps}/bin/prefetch-npm-deps \
               ${pkgs.nix}/bin/nix
           '');

@@ -1,8 +1,8 @@
-{ lib, buildNpmPackage, nodejs_22, fetchurl }:
+{ lib, buildNpmPackage, fetchurl }:
 
 buildNpmPackage rec {
   pname = "actual-cli";
-  version = "26.8.1";
+  version = "26.9.0";
 
   # The package is only published to the npm registry (no GitHub release
   # tarball), so we fetch the npm tarball directly. It extracts to a top-level
@@ -10,7 +10,7 @@ buildNpmPackage rec {
   # build and fetchNpmDeps.
   src = fetchurl {
     url = "https://registry.npmjs.org/@actual-app/cli/-/cli-${version}.tgz";
-    hash = "sha256-1UAthd/As1enwzuuM0auQfEpB+ujj7myNxKYCSGH8xc=";
+    hash = "sha256-5+BrGfbzB6mYuep7WzNpNCoxlii7pspaRgThho2c5Ag=";
   };
 
   sourceRoot = "package";
@@ -26,15 +26,12 @@ buildNpmPackage rec {
     cp ${./package-lock.json} package-lock.json
   '';
 
-  npmDepsHash = "sha256-cSeYLk15QiabqK09DieFDPZHp1a04Bngi0o/XDZLW6k=";
+  npmDepsHash = "sha256-B1dinSYtVHGiLLvP0YhwkGR3jcdb02kCgWFZP+mmm7Q=";
 
   # The published tarball already contains the bundled build output; there is
   # nothing for the npm build script (vite) to do, and the source it would need
   # is not shipped anyway.
   dontNpmBuild = true;
-
-  # Actual's CLI requires Node.js v22 or higher.
-  nodejs = nodejs_22;
 
   meta = with lib; {
     description = "Command-line interface for Actual Budget";

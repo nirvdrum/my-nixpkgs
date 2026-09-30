@@ -86,7 +86,7 @@ Run the following from the repo root:
 nix run .#update-actual-cli
 ```
 
-This installs dependencies into a throwaway directory using the same `nodejs_22` npm
+This installs dependencies into a throwaway directory using the same default `nodejs` npm
 that the build uses, so the regenerated lockfile matches what `fetchNpmDeps` resolves
 at build time and future updates stay minimal diffs.
 
