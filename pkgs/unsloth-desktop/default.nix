@@ -151,6 +151,17 @@ if stdenvNoCC.hostPlatform.isLinux then
       # headers and the HIP runtime shipped in the ROCm wheels, so the wrapper
       # compiler from nixpkgs is sufficient.
       pkgs.gcc
+
+      # The installer creates its venv from the first Python 3.13 that uv
+      # finds and then reuses that interpreter for good. Picked up from the
+      # host, that is a fixed store path whose glibc stops matching the system
+      # as soon as nixpkgs moves to a newer one. The backend's processes then
+      # cannot load the host's Mesa Vulkan driver, which needs the newer glibc,
+      # so the Vulkan VRAM probe finds no devices and aborts with a core dump
+      # every few seconds. A venv created from this /usr/bin/python3.13
+      # instead records that path, which always resolves to the interpreter
+      # built alongside the system's Mesa.
+      pkgs.python313
     ];
 
     # Exporting LD_LIBRARY_PATH here covers everything that runs inside the FHS
