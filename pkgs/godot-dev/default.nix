@@ -37,28 +37,28 @@ let
   # (e.g., "dev3", "beta1", "rc1").  Together they form the tag used by the
   # godot-builds repository on GitHub.
   baseVersion = "4.8";
-  preLabel = "dev6";
+  preLabel = "dev7";
   version = "${baseVersion}-${preLabel}";
 
   srcs = {
     linuxStandard = fetchurl {
       url = "https://github.com/godotengine/godot-builds/releases/download/${version}/Godot_v${version}_linux.x86_64.zip";
-      hash = "sha256-02eAGdCmUB11TbNoBxEKAqHPok1JiGvo06ctkfqoDKM=";
+      hash = "sha256-1+aURylp1JphB23zSnzInA5DSGKbwGx9uNCUlSzrp3g=";
     };
 
     linuxMono = fetchurl {
       url = "https://github.com/godotengine/godot-builds/releases/download/${version}/Godot_v${version}_mono_linux_x86_64.zip";
-      hash = "sha256-FljusZwEt2xyPe+E3tRMKPgJhfQL68w2mUobixvel5k=";
+      hash = "sha256-daDHYIoRlDtH8eP+hc11uoZurobDVRhQz0IWKXm7mpQ=";
     };
 
     macosStandard = fetchurl {
       url = "https://github.com/godotengine/godot-builds/releases/download/${version}/Godot_v${version}_macos.universal.zip";
-      hash = "sha256-zUqAGwStzZyVkTrNqJfOXbnSiK/7R118SYUbvJfOPAk=";
+      hash = "sha256-g7k/7tgReICt9oZQEaj6ikPiI0Yj1dSM20mkj8IQzEo=";
     };
 
     macosMono = fetchurl {
       url = "https://github.com/godotengine/godot-builds/releases/download/${version}/Godot_v${version}_mono_macos.universal.zip";
-      hash = "sha256-XWOuJyxs24nIJmO9AzblHIO0KtHmT0lhPD7xAuWDnPY=";
+      hash = "sha256-1bqib5qOSNuf2amRoQUuT3lyEdVoo5c3LuviWBYu1Fo=";
     };
   };
 
