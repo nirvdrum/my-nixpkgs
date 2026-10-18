@@ -3,6 +3,7 @@
   stdenv,
   stdenvNoCC,
   appimageTools,
+  bubblewrap,
   buildFHSEnv,
   fetchurl,
   runCommand,
@@ -208,9 +209,19 @@ if stdenvNoCC.hostPlatform.isLinux then
     # is installed. The host also exports GIO_EXTRA_MODULES pointing at its own
     # dconf and gvfs modules, which is inherited here, so prepend rather than
     # overwrite to leave those working.
+    #
+    # The backend runs Python and Terminal tool calls in a bubblewrap sandbox
+    # only if it trusts the bwrap it finds, and that check wants every file and
+    # directory involved to be owned by root. Inside the FHS environment's user
+    # namespace, host root is unmapped and shows up as the overflow uid, so no
+    # bwrap is ever trusted and tool calls quietly fall back to the backend's
+    # weaker software safeguards. Upstream accepts an explicitly pinned bwrap in
+    # that case, and nesting one inside the FHS environment works without any
+    # extra privileges.
     profile = ''
       export LD_LIBRARY_PATH="/usr/lib64''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
       export GIO_EXTRA_MODULES="/usr/lib64/gio/modules''${GIO_EXTRA_MODULES:+:$GIO_EXTRA_MODULES}"
+      export UNSLOTH_BWRAP_PATH="${bubblewrap}/bin/bwrap"
     '';
 
     extraInstallCommands = ''
