@@ -3,10 +3,12 @@
   stdenv,
   stdenvNoCC,
   appimageTools,
+  buildFHSEnv,
   fetchurl,
   runCommand,
   undmg,
   vulkan-loader,
+  writeShellScript,
   zlib,
   zstd,
 }:
@@ -75,19 +77,12 @@ if stdenvNoCC.hostPlatform.isLinux then
 
 # WebKitGTK resolves'
     '';
-  in
-  appimageTools.wrapAppImage {
-    inherit pname version;
-
-    # wrapAppImage runs whatever directory it is handed here, so this is where
-    # the patched copy of the extracted AppImage is substituted for the original.
-    src = patchedAppimageContents;
 
     # The AppImage bundles a Tauri binary that dynamically loads its webview and
     # tray-icon stack from the host system rather than shipping it. None of these
     # libraries are in appimageTools' default FHS environment, so without them the
     # app exits at startup complaining about missing Linux libraries.
-    extraPkgs = pkgs: [
+    fhsExtraPkgs = pkgs: [
       pkgs.webkitgtk_4_1 # Provides libwebkit2gtk-4.1 and libjavascriptcoregtk-4.1.
       pkgs.libsoup_3
 
@@ -164,6 +159,43 @@ if stdenvNoCC.hostPlatform.isLinux then
       pkgs.python313
     ];
 
+    # The installer also links an `unsloth` command into ~/.local/bin, but its
+    # shebang names the venv's interpreter, which is either a store path that
+    # disappears on the next garbage collection or /usr/bin/python3.13, which
+    # exists only inside the FHS environment. Even when it does start, the
+    # wheels it imports cannot find the libraries in pythonWheelLibraries. This
+    # runs the same entry point inside an FHS environment that matches the one
+    # the app's own backend sees, so the CLI behaves exactly as the backend does.
+    unslothCli = buildFHSEnv (
+      appimageTools.defaultFhsEnvArgs
+      // {
+        pname = "unsloth";
+        inherit version;
+
+        targetPkgs = pkgs: appimageTools.defaultFhsEnvArgs.targetPkgs pkgs ++ fhsExtraPkgs pkgs;
+
+        runScript = writeShellScript "unsloth" ''
+          cli="$HOME/.unsloth/studio/unsloth_studio/bin/unsloth"
+          if [ ! -x "$cli" ]; then
+            echo "unsloth: $cli not found; launch ${pname} once to finish installing Unsloth Studio." >&2
+            exit 1
+          fi
+
+          export LD_LIBRARY_PATH="${pythonWheelLibraries}"
+          exec "$cli" "$@"
+        '';
+      }
+    );
+  in
+  appimageTools.wrapAppImage {
+    inherit pname version;
+
+    # wrapAppImage runs whatever directory it is handed here, so this is where
+    # the patched copy of the extracted AppImage is substituted for the original.
+    src = patchedAppimageContents;
+
+    extraPkgs = fhsExtraPkgs;
+
     # Exporting LD_LIBRARY_PATH here covers everything that runs inside the FHS
     # environment before the AppImage's own launcher takes over; the launcher
     # then clears the variable, which is why the libraries the Python backend
@@ -187,6 +219,8 @@ if stdenvNoCC.hostPlatform.isLinux then
       substituteInPlace $out/share/applications/${pname}.desktop \
         --replace-fail 'Exec=unsloth-studio %u' 'Exec=${pname} %u'
       cp -r ${appimageContents}/usr/share/icons $out/share/
+
+      ln -s ${unslothCli}/bin/unsloth $out/bin/unsloth
     '';
 
     meta = {
