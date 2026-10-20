@@ -83,11 +83,11 @@ let
 
   wyoming-openai = py.buildPythonPackage rec {
     pname = "wyoming_openai";
-    version = "0.7.0";
+    version = "0.8.0";
     format = "wheel";
     src = fetchWheel {
       inherit pname version;
-      hash = "sha256-ei9YhV0AglsoGRm7R1ROqnUfA2Z+OKShqZQ+stsc8fM=";
+      hash = "sha256-1mvChGUWwqe1SHYSj00O7O+hcjKekkjXmMnKr+Fr0jQ=";
     };
 
     dependencies = [
