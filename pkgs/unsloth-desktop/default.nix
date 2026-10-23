@@ -26,7 +26,7 @@ if stdenvNoCC.hostPlatform.isLinux then
       hash = "sha256-YltUJWET6uo1OxUr6+bN8yrW2SVdVBEmt3fpy+HTZB4=";
     };
 
-    appimageContents = appimageTools.extractType2 { inherit pname version src; };
+    appimageContents = appimageTools.extract { inherit pname version src; };
 
     # The Python virtual environment the app builds under ~/.unsloth on first run
     # is created from a Nix-store interpreter, and the binary wheels it installs

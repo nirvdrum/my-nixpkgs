@@ -18,7 +18,7 @@ if stdenvNoCC.hostPlatform.isLinux then
       hash = "sha256-K1rbgQGkVFY/qKW2A8YeaxDVFZtvCeV2AJQl73G5tcI=";
     };
 
-    appimageContents = appimageTools.extractType2 { inherit pname version src; };
+    appimageContents = appimageTools.extract { inherit pname version src; };
   in
   appimageTools.wrapType2 {
     inherit pname version src;
