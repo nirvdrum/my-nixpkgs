@@ -291,10 +291,12 @@
         '';
 
         # Queries the godot-builds GitHub releases for the newest pre-release
-        # snapshot in the next Godot development cycle (dev, beta, or rc tags
-        # for the version after the current stable line).  Fetches fresh hashes
-        # for both the standard and mono Linux x86_64 archives and rewrites the
-        # derivation.  Must be run from the root of the flake checkout.
+        # snapshot (dev, beta, or rc tag) across all development cycles, so the
+        # transitions from dev to beta to rc and from one cycle to the next
+        # (e.g., 4.8-rc3 to 4.9-dev1) are followed without manual edits.
+        # Fetches fresh hashes for the standard and mono archives on Linux
+        # x86_64 and on macOS arm64 and x86_64, then rewrites the derivation.
+        # Must be run from the root of the flake checkout.
         updateGodotDevScript = pkgs.writeText "update-godot-dev.py" ''
           import json
           import re
@@ -343,22 +345,28 @@
 
               for release in releases:
                   tag = release.get("tag_name", "")
-                  m = tag_pattern.match(tag)
-                  if m and m.group(1) == current_base:
+                  if tag_pattern.match(tag):
                       candidates.append(tag)
 
               page += 1
 
           if not candidates:
-              print(f"error: no pre-release tags found for {current_base}", file=sys.stderr)
+              print("error: no pre-release tags found", file=sys.stderr)
               sys.exit(1)
 
-          # Sort candidates so that rc > beta > dev, and higher numbers come first.
+          # Sort candidates so that a newer base version wins, then rc > beta >
+          # dev within a cycle, then higher snapshot numbers.
           phase_order = {"rc": 2, "beta": 1, "dev": 0}
 
           def sort_key(tag):
               m = tag_pattern.match(tag)
-              return (phase_order.get(m.group(2), -1), int(m.group(3)))
+              base = tuple(int(part) for part in m.group(1).split("."))
+              return (base, phase_order.get(m.group(2), -1), int(m.group(3)))
+
+          if current_tag not in candidates:
+              # The derivation may be pinned to a tag that has already fallen off
+              # the pages we fetched; include it so the comparison below is sound.
+              candidates.append(current_tag)
 
           candidates.sort(key=sort_key, reverse=True)
           latest_tag = candidates[0]
@@ -367,6 +375,10 @@
           if current_tag == latest_tag:
               print("Already up to date.")
               sys.exit(0)
+
+          if sort_key(latest_tag) < sort_key(current_tag):
+              print(f"error: newest upstream tag {latest_tag} is older than current {current_tag}", file=sys.stderr)
+              sys.exit(1)
 
           m = tag_pattern.match(latest_tag)
           new_base = m.group(1)
@@ -383,25 +395,29 @@
                   sys.exit(1)
               return h.group(1)
 
-          print("Fetching standard Linux x86_64 hash...")
-          linux_std_hash = prefetch_hash(
-              f"https://github.com/godotengine/godot-builds/releases/download/{latest_tag}/Godot_v{latest_tag}_linux.x86_64.zip"
-          )
+          # Each entry maps an asset filename suffix (everything after the
+          # "Godot_v<tag>_" prefix) to the regex that locates its hash in the
+          # derivation.  The macOS hashes live in a per-architecture attribute
+          # set, so they are matched by the attribute name within the block that
+          # follows the corresponding URL.
+          assets = [
+              ("linux.x86_64.zip", r'(}_linux\.x86_64\.zip";\n\s+hash = ")[^"]*(")'),
+              ("mono_linux_x86_64.zip", r'(_mono_linux_x86_64\.zip";\n\s+hash = ")[^"]*(")'),
+              ("macos.arm64.zip", r'(}_macos\.\$\{macosArch}\.zip";\n\s+hash = \{\n\s+arm64 = ")[^"]*(")'),
+              ("macos.x86_64.zip", r'(}_macos\.\$\{macosArch}\.zip";\n\s+hash = \{\n\s+arm64 = "[^"]*";\n\s+x86_64 = ")[^"]*(")'),
+              ("mono_macos.arm64.zip", r'(_mono_macos\.\$\{macosArch}\.zip";\n\s+hash = \{\n\s+arm64 = ")[^"]*(")'),
+              ("mono_macos.x86_64.zip", r'(_mono_macos\.\$\{macosArch}\.zip";\n\s+hash = \{\n\s+arm64 = "[^"]*";\n\s+x86_64 = ")[^"]*(")'),
+          ]
 
-          print("Fetching mono Linux x86_64 hash...")
-          linux_mono_hash = prefetch_hash(
-              f"https://github.com/godotengine/godot-builds/releases/download/{latest_tag}/Godot_v{latest_tag}_mono_linux_x86_64.zip"
-          )
-
-          print("Fetching standard macOS universal hash...")
-          macos_std_hash = prefetch_hash(
-              f"https://github.com/godotengine/godot-builds/releases/download/{latest_tag}/Godot_v{latest_tag}_macos.universal.zip"
-          )
-
-          print("Fetching mono macOS universal hash...")
-          macos_mono_hash = prefetch_hash(
-              f"https://github.com/godotengine/godot-builds/releases/download/{latest_tag}/Godot_v{latest_tag}_mono_macos.universal.zip"
-          )
+          for suffix, pattern in assets:
+              print(f"Fetching hash for {suffix}...")
+              new_hash = prefetch_hash(
+                  f"https://github.com/godotengine/godot-builds/releases/download/{latest_tag}/Godot_v{latest_tag}_{suffix}"
+              )
+              content, count = re.subn(pattern, lambda m: m.group(1) + new_hash + m.group(2), content)
+              if count != 1:
+                  print(f"error: expected exactly one hash slot for {suffix} in {DERIVATION}, found {count}", file=sys.stderr)
+                  sys.exit(1)
 
           content = content.replace(
               f'baseVersion = "{current_base}"',
@@ -410,26 +426,6 @@
           content = content.replace(
               f'preLabel = "{current_pre}"',
               f'preLabel = "{new_pre}"',
-          )
-          content = re.sub(
-              r'(linux\.x86_64\.zip";\n\s+hash = ")[^"]+(")',
-              lambda m: m.group(1) + linux_std_hash + m.group(2),
-              content,
-          )
-          content = re.sub(
-              r'(mono_linux_x86_64\.zip";\n\s+hash = ")[^"]+(")',
-              lambda m: m.group(1) + linux_mono_hash + m.group(2),
-              content,
-          )
-          content = re.sub(
-              r'(_macos\.universal\.zip";\n\s+hash = ")[^"]+(")',
-              lambda m: m.group(1) + macos_std_hash + m.group(2),
-              content,
-          )
-          content = re.sub(
-              r'(_mono_macos\.universal\.zip";\n\s+hash = ")[^"]+(")',
-              lambda m: m.group(1) + macos_mono_hash + m.group(2),
-              content,
           )
 
           with open(DERIVATION, "w") as f:

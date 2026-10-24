@@ -37,28 +37,39 @@ let
   # (e.g., "dev3", "beta1", "rc1").  Together they form the tag used by the
   # godot-builds repository on GitHub.
   baseVersion = "4.8";
-  preLabel = "dev7";
+  preLabel = "beta1";
   version = "${baseVersion}-${preLabel}";
+
+  # Starting with 4.8-beta1, upstream distributes macOS builds as separate
+  # arm64 and x86_64 archives instead of a single universal binary, so the
+  # macOS source is selected by host architecture.
+  macosArch = if stdenvNoCC.hostPlatform.isAarch64 then "arm64" else "x86_64";
 
   srcs = {
     linuxStandard = fetchurl {
       url = "https://github.com/godotengine/godot-builds/releases/download/${version}/Godot_v${version}_linux.x86_64.zip";
-      hash = "sha256-1+aURylp1JphB23zSnzInA5DSGKbwGx9uNCUlSzrp3g=";
+      hash = "sha256-GZstag2qOnSmlzVvMcMzR/mX9lJYun3QfKjBEQdXkn0=";
     };
 
     linuxMono = fetchurl {
       url = "https://github.com/godotengine/godot-builds/releases/download/${version}/Godot_v${version}_mono_linux_x86_64.zip";
-      hash = "sha256-daDHYIoRlDtH8eP+hc11uoZurobDVRhQz0IWKXm7mpQ=";
+      hash = "sha256-Wp4qsGOjlUaY0tNafL50g2q29aR1ErpjypsvU/68aQI=";
     };
 
     macosStandard = fetchurl {
-      url = "https://github.com/godotengine/godot-builds/releases/download/${version}/Godot_v${version}_macos.universal.zip";
-      hash = "sha256-g7k/7tgReICt9oZQEaj6ikPiI0Yj1dSM20mkj8IQzEo=";
+      url = "https://github.com/godotengine/godot-builds/releases/download/${version}/Godot_v${version}_macos.${macosArch}.zip";
+      hash = {
+        arm64 = "sha256-soZ9quYo8aSWm29EOt7Hu5r2ggcpocc8CjGOXGfpq1Q=";
+        x86_64 = "sha256-WFEYT9H2utL/E4niPIP0F+rBI5s/hq5Ke6UBwOXTzlM=";
+      }.${macosArch};
     };
 
     macosMono = fetchurl {
-      url = "https://github.com/godotengine/godot-builds/releases/download/${version}/Godot_v${version}_mono_macos.universal.zip";
-      hash = "sha256-1bqib5qOSNuf2amRoQUuT3lyEdVoo5c3LuviWBYu1Fo=";
+      url = "https://github.com/godotengine/godot-builds/releases/download/${version}/Godot_v${version}_mono_macos.${macosArch}.zip";
+      hash = {
+        arm64 = "sha256-054aWzcM7AGfPKC2ZZLz1NdREz7EVb/jdnPy/ivqeEM=";
+        x86_64 = "sha256-IahnuTlaFdZHeS4uisbTa93gqWy5HUgg+5t+L/zf4kA=";
+      }.${macosArch};
     };
   };
 
@@ -82,8 +93,8 @@ if stdenvNoCC.hostPlatform.isDarwin then
   let
     src = if withMono then srcs.macosMono else srcs.macosStandard;
 
-    # Both the standard and mono macOS zips ship a single universal .app
-    # bundle at the archive root; only the bundle name differs.  The binary
+    # Both the standard and mono macOS zips ship a single .app bundle at the
+    # archive root; only the bundle name differs.  The binary
     # inside the bundle is named "Godot" in both cases.
     appName = if withMono then "Godot_mono.app" else "Godot.app";
   in

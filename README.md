@@ -189,19 +189,17 @@ prefetches the source tarball hash, and rewrites `pkgs/h3c/default.nix`.
 
 **godot-dev** and **godot-dev-mono** track pre-release builds from the
 [godot-builds](https://github.com/godotengine/godot-builds) GitHub repository.
-To update to the latest dev/beta/RC snapshot in the current development cycle:
+To update to the latest dev/beta/RC snapshot:
 
 ```
 nix run .#update-godot-dev
 ```
 
-This queries the GitHub releases API for the newest `dev`, `beta`, or `rc` tag in the
-configured base version series (e.g., 4.7), prefetches fresh hashes for the standard
-and mono variants on both Linux x86_64 and macOS (universal binary), and rewrites
-`pkgs/godot-dev/default.nix`.
-
-> **Note:** When a new major development cycle begins (e.g., 4.8), update the
-> `baseVersion` field in the derivation manually before running the update script.
+This queries the GitHub releases API for the newest `dev`, `beta`, or `rc` tag across
+all development cycles, so it follows the dev -> beta -> rc progression within a cycle
+and the jump to the next cycle (e.g., `4.8-rc3` -> `4.9-dev1`) without manual edits. It
+prefetches fresh hashes for the standard and mono variants on Linux x86_64 and on macOS
+arm64 and x86_64, and rewrites `pkgs/godot-dev/default.nix`.
 
 **strix-llama-cpp-vulkan** and **strix-llama-cpp-rocm** build [halo-box/strix-llama.cpp](https://github.com/halo-box/strix-llama.cpp), a llama.cpp fork tuned for AMD Strix Halo (gfx1151), from source. The fork recommends the Vulkan (RADV) backend as the default on this hardware. The ROCm variant compiles its HIP kernels for gfx1151 only (override with the `rocmGpuTargets` argument), and its executables default `HIP_LAUNCH_BLOCKING=1` because the fork's HIP path needs serialized kernel launches for correct output on gfx1151. The fork's tags lag its optimization work by weeks, so both variants track the head of `master`.
 
