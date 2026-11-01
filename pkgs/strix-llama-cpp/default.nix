@@ -57,11 +57,11 @@ let
   # web UI. Upstream derives them from git history, which a GitHub archive
   # does not carry, so the update script records the commit count here. They
   # are informational only; nothing gates on them.
-  buildNumber = "11640";
+  buildNumber = "12297";
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "strix-llama-cpp-${variant}";
-  version = "unstable-2026-10-09";
+  version = "unstable-2026-11-01";
 
   __structuredAttrs = true;
   strictDeps = true;
@@ -74,14 +74,14 @@ stdenv.mkDerivation (finalAttrs: {
   src = fetchFromGitHub {
     owner = "halo-box";
     repo = "strix-llama.cpp";
-    rev = "6aa81b88e14aa753c1c7e1a9ff27c9d50fd3c673";
-    hash = "sha256-/HMV4WHf1mkXkVFihE5rxVGa0JJHmevsplDmtRlPI4s=";
+    rev = "ee30b949e8bf9827b06cc4de925c040b91045c56";
+    hash = "sha256-In5qVn9TVnWbWub1Ecm2lCUm35+2cfC+UWle90SEmeI=";
   };
 
   # The web UI served by llama-server is a Svelte app that is compiled during
   # the build and embedded into the binary.
   npmRoot = "tools/ui";
-  npmDepsHash = "sha256-2Q7XhaLAArmviOLdQsNbYTfdyDE5pW9lR26cRHEVl9k=";
+  npmDepsHash = "sha256-hqYzdp1FwPhYkBP278fQXgY9NCKB6Q3P6Gko7BfP0m0=";
   npmDeps = fetchNpmDeps {
     name = "${finalAttrs.pname}-${finalAttrs.version}-npm-deps";
     inherit (finalAttrs) src;
