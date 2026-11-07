@@ -16,13 +16,13 @@
 # The CPU-only path is provided for diagnostics only and is known to crash macOS kernels.
 let
   pname = "ds4";
-  version = "unstable-2026-11-01";
+  version = "unstable-2026-11-03";
 
   src = fetchFromGitHub {
     owner = "antirez";
     repo = "ds4";
-    rev = "b4e3faf5262b21db94ec309cf321640ff1eed460";
-    hash = "sha256-gvZwA1fsfJ1pAL6AodOlBDPzYWkMR7AO0F48Y+Pn5/M=";
+    rev = "b3f50180ec2c7324892be1f50bc83555ccb8d5e7";
+    hash = "sha256-XccxnYqo33w1mNZNAMFx/rdPhO57lxQ/oKPGSyxzh0E=";
   };
 
   binaries = [ "ds4" "ds4-server" "ds4-bench" "ds4-eval" "ds4-agent" ];
