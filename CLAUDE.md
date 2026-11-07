@@ -62,6 +62,7 @@ This repo is a Nix flake. Recommended layout:
 - **Hash discovery:** Set `hash = "";` initially, run `nix build`, and copy the correct SRI hash from the mismatch error. Do not guess or derive hashes manually.
 - If the package tracks a frequently-updated upstream (RCs, weekly builds, etc.), add a corresponding `apps.${system}.update-<name>` entry in `flake.nix` that calls `nix-update` with the appropriate `--version-regex` filter. This makes updates a single `nix run` invocation rather than a manual process.
 - Add the newly created package to the `update-all` app so it may be updated alongside existing packages.
+- **Add a row to `.claude/skills/update-packages/references/packages.md`** so the update skill knows the package's display name, flake attributes, and smoke test.
 - **Update `README.md`** whenever a package is added or removed. The README contains a package table and per-package update instructions that must stay in sync with what `flake.nix` actually exposes. The package table should be sorted lexicographically and its column separators should be aligned for readability in plain text.
 
 ### Additional checklist for AppImage packages
