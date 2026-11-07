@@ -57,11 +57,11 @@ let
   # web UI. Upstream derives them from git history, which a GitHub archive
   # does not carry, so the update script records the commit count here. They
   # are informational only; nothing gates on them.
-  buildNumber = "12297";
+  buildNumber = "12334";
 in
 stdenv.mkDerivation (finalAttrs: {
   pname = "strix-llama-cpp-${variant}";
-  version = "unstable-2026-11-01";
+  version = "unstable-2026-11-07";
 
   __structuredAttrs = true;
   strictDeps = true;
@@ -74,8 +74,8 @@ stdenv.mkDerivation (finalAttrs: {
   src = fetchFromGitHub {
     owner = "halo-box";
     repo = "strix-llama.cpp";
-    rev = "ee30b949e8bf9827b06cc4de925c040b91045c56";
-    hash = "sha256-In5qVn9TVnWbWub1Ecm2lCUm35+2cfC+UWle90SEmeI=";
+    rev = "62a3f414447eb8487294c34678ddc8974be7c7f9";
+    hash = "sha256-Ab/zf+agX/bfiY9TDqtDYt0XCUmRK5ckoh79Q1z/1UE=";
   };
 
   # The web UI served by llama-server is a Svelte app that is compiled during
