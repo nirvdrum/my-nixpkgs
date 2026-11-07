@@ -1,7 +1,9 @@
 {
   lib,
+  fetchFromGitHub,
   fetchPypi,
   python3Packages,
+  rustPlatform,
   writeShellApplication,
 }:
 
@@ -10,9 +12,11 @@
 # any server speaking OpenAI's audio API. Home Assistant's own Wyoming
 # integration connects to it like any other Wyoming service.
 #
-# Upstream publishes pure-Python wheels, which are used directly. Two of the
-# sentence splitter's dependencies are not in nixpkgs, so they are defined here
-# alongside it rather than as separate packages, since nothing else uses them.
+# Upstream publishes pure-Python wheels, which are used directly. Upstream also
+# pins its dependencies more tightly than nixpkgs can satisfy, so the versions
+# it asks for are defined here rather than as separate packages, since nothing
+# else uses them. The dependency list is deliberately not relaxed, which makes
+# the build fail when a new release asks for something these no longer provide.
 let
   py = python3Packages;
 
@@ -33,6 +37,77 @@ let
       format = "wheel";
       dist = python;
     };
+
+  # nixpkgs carries a newer major version than the `openai` Realtime extra and
+  # wyoming_openai both allow. The test suite is skipped because the nixpkgs
+  # list of disabled tests is written for the newer version.
+  websockets = py.websockets.overridePythonAttrs (_: rec {
+    version = "15.0.1";
+    src = fetchFromGitHub {
+      owner = "aaugustin";
+      repo = "websockets";
+      tag = version;
+      hash = "sha256-DC1nK+TvCoCqchyWJOyT4Ul4gkTYXixu7XmTqvytqEo=";
+    };
+    doCheck = false;
+  });
+
+  # nixpkgs carries an older version than `openai` requires. The sdist is used
+  # because it includes a Cargo.lock, which the upstream repository does not
+  # provide, and it does not include the test suite.
+  jiter = py.jiter.overridePythonAttrs (_: rec {
+    version = "0.19.0";
+    src = fetchPypi {
+      pname = "jiter";
+      inherit version;
+      hash = "sha256-ujBk+L4nbXz7g8L7hchYvlM9osL4D5sEjDeBtFpXoZU=";
+    };
+    postPatch = "";
+    # The sdist's pyproject.toml is at the root and names the module. Building
+    # from the subdirectory would skip it and install the module under the
+    # name of the crate instead.
+    buildAndTestSubdir = null;
+    cargoDeps = rustPlatform.fetchCargoVendor {
+      inherit src;
+      name = "jiter-${version}-vendor";
+      hash = "sha256-5HFH/uoN2UKsJFQ6k1rrD6KBYkvWX8NUZgiBgxOXeLo=";
+    };
+    doCheck = false;
+  });
+
+  openai = py.buildPythonPackage rec {
+    pname = "openai";
+    version = "3.44.0";
+    format = "wheel";
+    src = fetchWheel {
+      inherit pname version;
+      hash = "sha256-DuviVYF3NGH+etDl+lNxO16fWcQPzLySRs+C//cr/9k=";
+    };
+    dependencies = [
+      py.anyio
+      py.httpx2
+      jiter
+      py.pydantic
+      py.sniffio
+      py.typing-extensions
+      # The `realtime` extra, used by the realtime transcription path.
+      websockets
+    ];
+    pythonImportsCheck = [ "openai" ];
+    meta.license = lib.licenses.asl20;
+  };
+
+  wyoming = py.buildPythonPackage rec {
+    pname = "wyoming";
+    version = "1.11.0";
+    format = "wheel";
+    src = fetchWheel {
+      inherit pname version;
+      hash = "sha256-7OXvhWA9gRGLwtUGea0a7eh78k9qxepxCtlFd9IBaN0=";
+    };
+    pythonImportsCheck = [ "wyoming" ];
+    meta.license = lib.licenses.mit;
+  };
 
   retrie = py.buildPythonPackage rec {
     pname = "retrie";
@@ -63,16 +138,13 @@ let
   # speech can start playing before the whole reply has been synthesized.
   yasbd-lib = py.buildPythonPackage rec {
     pname = "yasbd_lib";
-    version = "0.16.2";
+    version = "1.0.5";
     format = "wheel";
     src = fetchWheel {
       inherit pname version;
-      hash = "sha256-+BGGqny2X+X7rUwWo3XkLaiAdY6raArNTNLjAs8ZxTM=";
+      hash = "sha256-a1k5EUuKESis3/hCWSfketxU+OX+W3w03IuQCcckaQg=";
     };
     dependencies = [
-      py.beartype
-      py.ftfy
-      py.loguru
       radicli
       py.regex
       retrie
@@ -83,27 +155,18 @@ let
 
   wyoming-openai = py.buildPythonPackage rec {
     pname = "wyoming_openai";
-    version = "0.8.0";
+    version = "0.9.0";
     format = "wheel";
     src = fetchWheel {
       inherit pname version;
-      hash = "sha256-1mvChGUWwqe1SHYSj00O7O+hcjKekkjXmMnKr+Fr0jQ=";
+      hash = "sha256-UHCbVrVJ5uW4W8qZPa34prRU8hBfbgbiJEqNtSZrkMk=";
     };
 
     dependencies = [
-      py.openai
-      # The `openai[realtime]` extra, used by the realtime transcription path.
-      py.websockets
-      py.wyoming
+      openai
+      websockets
+      wyoming
       yasbd-lib
-    ];
-
-    # Upstream pins exact versions of each dependency. nixpkgs carries newer
-    # releases of openai, and the API surface used here is stable across them.
-    pythonRelaxDeps = [
-      "openai"
-      "wyoming"
-      "yasbd-lib"
     ];
 
     pythonImportsCheck = [ "wyoming_openai" ];

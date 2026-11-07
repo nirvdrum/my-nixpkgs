@@ -1289,9 +1289,10 @@
         '';
 
         # Queries PyPI for the newest wyoming-openai release and rewrites the
-        # version and wheel hash in its derivation. The sentence splitter and
-        # its two helper libraries are pinned separately in the same file and
-        # only need bumping when a new wyoming-openai release requires it.
+        # version and wheel hash in its derivation. Its dependencies are pinned
+        # separately in the same file and are not updated here. A new release
+        # that requires different versions fails the build's runtime dependency
+        # check, and those pins must then be updated by hand.
         # Must be run from the root of the flake checkout.
         updateWyomingOpenaiScript = pkgs.writeText "update-wyoming-openai.py" ''
           import base64
