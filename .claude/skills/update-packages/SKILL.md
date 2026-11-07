@@ -47,7 +47,9 @@ When a changed directory has no row in that table, the package was added after t
 
 If nothing changed, say so and stop. Do not create empty commits.
 
-## 3. Build and run every changed package
+## 3. Check dependencies, then build and run every changed package
+
+Updating a package includes updating its dependency list, and a green updater does not prove that happened. Before building, compare what the new release declares with what the derivation provides. For a PyPI package, that is `requires_dist` from `https://pypi.org/pypi/<name>/<version>/json`, followed through any pinned dependencies and the extras requested of them. Treat any mismatch as part of this update rather than an observation for the report, even if the package would build and run without fixing it. Lockfile-driven builds (Go, Rust, npm) carry their dependencies in the lockfile and vendor hash, and prebuilt bundles such as `textgen` ship their own, so this check does not apply to them.
 
 For each changed attribute that builds on this machine:
 
@@ -76,6 +78,7 @@ Build failures after a version bump cluster into a few patterns. Diagnose from t
   Fixing the toolchain usually uncovers a vendor hash mismatch next, since the updater never got that far.
 - **`install: cannot stat`** or a missing file in a post-install step: upstream renamed or removed something. List the unpacked source (`/nix/store/*-source` from the log) and point the install at the new name, or drop the step if the file is gone for good.
 - **GLX, EGL, or `GLIBC_x.y not found` at launch** from an AppImage or FHS package: this is the lock drift described in step 1, not the package. Run `nix flake update nixpkgs`, rebuild, and give the lock bump its own commit placed before the package commits, since it affects every FHS package at once.
+- **`<dependency> not satisfied by version`** from the runtime dependency check: the new release needs different dependencies, so package the versions it asks for. Do not add to `pythonRelaxDeps`, which only silences the check, and do not take a passing smoke test as evidence that relaxing was safe. Pure-Python dependencies can come from wheels, and compiled ones from an `overridePythonAttrs` of the nixpkgs derivation with new source and vendor hashes. Relax a pin only when the required version genuinely cannot be built, and say so in both the commit message and the report.
 - **The updater itself failed**: fix the script in `flake.nix`, rerun that single updater, and commit the script change separately from the version bump it then produces.
 
 After any fix, rebuild and rerun the smoke test. If a package cannot be made to work in reasonable time, leave its changes uncommitted, do not block the other packages on it, and explain the state in the report. Reverting the bump is the user's call.

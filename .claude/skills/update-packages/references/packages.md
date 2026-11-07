@@ -30,7 +30,7 @@ This table is a snapshot. When a package is added, removed, or its binary change
 - Packages tracking a branch rather than releases (`ds4`, `strix-llama-cpp`, `fastmail-rules-cli`, `h3c`) use `unstable-YYYY-MM-DD`. Commit subjects drop the `unstable-` prefix: "Update DS4 from 2026-10-07 -> 2026-11-01."
 - `godot-dev` builds its version from `baseVersion` and `preLabel`, so the diff shows `preLabel` changing. The subject uses the full label: "Update Godot from 4.8-beta1 to 4.8-beta2."
 - `freecad-weekly` stores `YYYY.MM.DD` with dots to match the upstream tag, but every commit subject in history writes it with dashes: "Update FreeCAD Weekly from 2026-10-07 -> 2026-10-28." Keep the dashes so the log stays uniform.
-- `wyoming-openai` has several `version =` lines because it vendors Python dependencies; only the last one (`wyoming_openai`) is the package version.
+- `wyoming-openai` has several `version =` lines because it vendors Python dependencies; only the last one (`wyoming_openai`) is the package version. Its updater also moves any pinned wheel that the new release's requirements rule out, so the diff may show several versions changing under one commit. It cannot update the source-built `websockets` and `jiter` overrides, so it names them and exits non-zero when they fall out of range, with everything else already written. Update those by hand, using `hash = ""` to discover both the source and vendor hashes.
 - `deadbranch` has a literal `tag = "v0.3.0"` that is not derived from `version`. If the updater bumps `version` without touching `tag`, the build will silently keep fetching the old source. Check that the tag moved too.
 
 ## Evaluating Darwin-only packages from Linux
