@@ -261,15 +261,16 @@
           # than /app/releases/<version>/, so hashing them yields a value that
           # never matches what the derivation downloads. A "?ver=" query string
           # does not select the versioned object either; the path must be used.
+          # Starting with 3.0.0, versioned assets live under a directory named
+          # for the major version. The old unprefixed path returns a 404 for
+          # these releases even though the changelog already lists them.
+          release_base = f"https://next-assets.msty.studio/app/releases/v{latest.split('.')[0]}/{latest}"
+
           print("Fetching Linux AppImage hash...")
-          linux_hash = prefetch_hash(
-              f"https://next-assets.msty.studio/app/releases/{latest}/linux/MstyStudio_x86_64.AppImage"
-          )
+          linux_hash = prefetch_hash(f"{release_base}/linux/MstyStudio_x86_64.AppImage")
 
           print("Fetching macOS DMG hash...")
-          macos_hash = prefetch_hash(
-              f"https://next-assets.msty.studio/app/releases/{latest}/mac/MstyStudio_arm64.dmg"
-          )
+          macos_hash = prefetch_hash(f"{release_base}/mac/MstyStudio_arm64.dmg")
 
           content = content.replace(f'version = "{current}"', f'version = "{latest}"', 1)
           content = re.sub(
