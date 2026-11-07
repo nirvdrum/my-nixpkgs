@@ -1289,10 +1289,14 @@
         '';
 
         # Queries PyPI for the newest wyoming-openai release and rewrites the
-        # version and wheel hash in its derivation. Its dependencies are pinned
-        # separately in the same file and are not updated here. A new release
-        # that requires different versions fails the build's runtime dependency
-        # check, and those pins must then be updated by hand.
+        # version and wheel hash in its derivation, along with any pinned wheel
+        # that no longer satisfies the requirements declared by that release or
+        # by the other pins. Pins that are still satisfied are left alone, so
+        # exact upstream pins move and loose ranges do not. Source-built
+        # overrides cannot be updated this way because they also need a vendor
+        # hash, so an unsatisfied one is reported and the script exits non-zero
+        # after writing everything else. Dependencies provided by nixpkgs are
+        # left to the build's runtime dependency check.
         # Must be run from the root of the flake checkout.
         updateWyomingOpenaiScript = pkgs.writeText "update-wyoming-openai.py" ''
           import base64
@@ -1302,46 +1306,156 @@
           import os
           import urllib.request
 
+          from packaging.requirements import Requirement
+          from packaging.specifiers import SpecifierSet
+          from packaging.utils import canonicalize_name
+          from packaging.version import Version
+
           DERIVATION = "pkgs/wyoming-openai/default.nix"
+          ROOT = "wyoming-openai"
 
           if not os.path.exists(DERIVATION):
               print("error: run this script from the root of the flake", file=sys.stderr)
               sys.exit(1)
 
-          with urllib.request.urlopen("https://pypi.org/pypi/wyoming-openai/json") as response:
-              release = json.load(response)
+          cache = {}
 
-          latest = release["info"]["version"]
-          wheels = [u for u in release["urls"] if u["packagetype"] == "bdist_wheel"]
-          if not wheels:
-              print(f"error: wyoming-openai {latest} has no wheel on PyPI", file=sys.stderr)
-              sys.exit(1)
-          sri = "sha256-" + base64.b64encode(bytes.fromhex(wheels[0]["digests"]["sha256"])).decode()
+          def pypi(name, version=None):
+              path = f"{name}/{version}" if version else name
+              if path not in cache:
+                  with urllib.request.urlopen(f"https://pypi.org/pypi/{path}/json") as response:
+                      cache[path] = json.load(response)
+              return cache[path]
+
+          def pure_wheel(files):
+              return next((f for f in files if f["filename"].endswith("-none-any.whl")), None)
+
+          def sri(wheel):
+              return "sha256-" + base64.b64encode(bytes.fromhex(wheel["digests"]["sha256"])).decode()
+
+          def wheel_tag(wheel):
+              return wheel["filename"].split("-")[-3]
+
+          def newest_matching(name, specifier, tag):
+              """Returns the newest stable release in range whose wheel fetchWheel can still fetch."""
+              candidates = []
+              for version, files in pypi(name)["releases"].items():
+                  parsed = Version(version)
+                  live = [f for f in files if not f["yanked"]]
+                  wheel = pure_wheel(live)
+                  if parsed.is_prerelease or not wheel or wheel_tag(wheel) != tag:
+                      continue
+                  if specifier.contains(parsed):
+                      candidates.append((parsed, version))
+              return max(candidates)[1] if candidates else None
 
           with open(DERIVATION) as f:
               content = f.read()
 
-          # Only the wyoming_openai block is updated; the helper libraries
-          # above it keep their own versions and hashes.
-          start = content.index('pname = "wyoming_openai";')
-          block_end = content.index("pythonImportsCheck", start)
-          block = content[start:block_end]
-          current = re.search(r'version = "([^"]+)"', block).group(1)
+          # The pins are read from the derivation so that adding or removing a
+          # dependency there needs no change here.
+          pnames = {}
+          wheel_pins = {}
+          tags = {}
+          for match in re.finditer(r'pname = "([^"]+)";\s+version = "([^"]+)";', content):
+              name = canonicalize_name(match.group(1))
+              pnames[name] = match.group(1)
+              wheel_pins[name] = match.group(2)
+              window = content[match.end():content.index("};", match.end())]
+              override = re.search(r'python = "([^"]+)";', window)
+              tags[name] = override.group(1) if override else "py3"
+          source_pins = {
+              canonicalize_name(m.group(1)): m.group(2)
+              for m in re.finditer(r'py\.([\w-]+)\.overridePythonAttrs \(_: rec \{\s+version = "([^"]+)";', content)
+          }
+
+          current = wheel_pins[ROOT]
+          latest = pypi(ROOT)["info"]["version"]
           print(f"Current: {current}")
           print(f"Latest:  {latest}")
-          if current == latest:
+          if not pure_wheel(pypi(ROOT)["urls"]):
+              print(f"error: {ROOT} {latest} has no wheel on PyPI", file=sys.stderr)
+              sys.exit(1)
+
+          targets = dict(wheel_pins)
+          targets[ROOT] = latest
+
+          def collect_constraints():
+              """Walks the requirements of every pin reachable from the root at its target version."""
+              constraints = {}
+              pending = [(ROOT, frozenset())]
+              seen = set()
+              while pending:
+                  name, extras = pending.pop()
+                  if (name, extras) in seen:
+                      continue
+                  seen.add((name, extras))
+                  for line in pypi(name, targets[name])["info"]["requires_dist"] or []:
+                      requirement = Requirement(line)
+                      environments = [{"extra": e} for e in extras] or [{"extra": ""}]
+                      if requirement.marker and not any(requirement.marker.evaluate(e) for e in environments):
+                          continue
+                      dependency = canonicalize_name(requirement.name)
+                      if dependency in targets or dependency in source_pins:
+                          constraints[dependency] = constraints.get(dependency, SpecifierSet()) & requirement.specifier
+                      if dependency in targets:
+                          pending.append((dependency, frozenset(requirement.extras)))
+              return constraints
+
+          # Moving one pin can change what another must satisfy, so this repeats
+          # until nothing moves. The bound guards against requirements that
+          # would otherwise chase each other forever.
+          problems = []
+          for _ in range(10):
+              constraints = collect_constraints()
+              moved = False
+              for name, specifier in constraints.items():
+                  if name not in targets or specifier.contains(Version(targets[name]), prereleases=True):
+                      continue
+                  chosen = newest_matching(name, specifier, tags[name])
+                  if chosen is None:
+                      problem = f"{name}: no {tags[name]} wheel satisfies {specifier}; pinned at {targets[name]}"
+                      if problem not in problems:
+                          problems.append(problem)
+                      continue
+                  targets[name] = chosen
+                  moved = True
+              if not moved:
+                  break
+          else:
+              problems.append("the pinned wheels did not settle on a consistent set of versions")
+
+          for name, specifier in constraints.items():
+              if name in source_pins and not specifier.contains(Version(source_pins[name]), prereleases=True):
+                  problems.append(f"{name}: source-built override at {source_pins[name]} does not satisfy {specifier}")
+
+          changed = []
+          for name, version in targets.items():
+              if version == wheel_pins[name]:
+                  continue
+              wheel = pure_wheel(pypi(name, version)["urls"])
+              # Only the first version and hash after the pname belong to this
+              # block, since every block in the file has the same shape.
+              start = content.index(f'pname = "{pnames[name]}";')
+              head = re.sub(r'version = "[^"]+"', f'version = "{version}"', content[start:], count=1)
+              head = re.sub(r'hash = "[^"]*"', f'hash = "{sri(wheel)}"', head, count=1)
+              content = content[:start] + head
+              changed.append(f"{name} {wheel_pins[name]} -> {version}")
+
+          if changed:
+              with open(DERIVATION, "w") as f:
+                  f.write(content)
+              for line in changed:
+                  print(f"Updated {line}")
+              print("Stage the change with: git add pkgs/wyoming-openai/default.nix")
+          else:
               print("Already up to date.")
-              sys.exit(0)
 
-          block = re.sub(r'version = "[^"]+"', f'version = "{latest}"', block, count=1)
-          block = re.sub(r'hash = "[^"]*"', f'hash = "{sri}"', block, count=1)
-          content = content[:start] + block + content[block_end:]
-          with open(DERIVATION, "w") as f:
-              f.write(content)
-
-          print(f"Updated {DERIVATION} from {current} to {latest}.")
-          print("Build it to check that the pinned dependencies still satisfy the new release.")
-          print("Stage the change with: git add pkgs/wyoming-openai/default.nix")
+          if problems:
+              print("error: these dependencies need updating by hand:", file=sys.stderr)
+              for problem in problems:
+                  print(f"  {problem}", file=sys.stderr)
+              sys.exit(1)
         '';
 
         # Queries the h3.c GitHub repository for the latest commit on main,
@@ -1721,7 +1835,7 @@
         update-wyoming-openai = {
           type = "app";
           program = toString (pkgs.writeShellScript "update-wyoming-openai" ''
-            exec ${pkgs.python3}/bin/python3 ${updateWyomingOpenaiScript}
+            exec ${pkgs.python3.withPackages (ps: [ ps.packaging ])}/bin/python3 ${updateWyomingOpenaiScript}
           '');
         };
 
