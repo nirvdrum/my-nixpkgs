@@ -37,7 +37,7 @@ let
   # (e.g., "dev3", "beta1", "rc1").  Together they form the tag used by the
   # godot-builds repository on GitHub.
   baseVersion = "4.8";
-  preLabel = "beta2";
+  preLabel = "beta3";
   version = "${baseVersion}-${preLabel}";
 
   # Starting with 4.8-beta1, upstream distributes macOS builds as separate
@@ -48,27 +48,27 @@ let
   srcs = {
     linuxStandard = fetchurl {
       url = "https://github.com/godotengine/godot-builds/releases/download/${version}/Godot_v${version}_linux.x86_64.zip";
-      hash = "sha256-HtDdKhu0UdNbZMCs5VPARW3/96QYeQJ0yk0llwVzYbs=";
+      hash = "sha256-VZXbMLutTTB20TLryOuvsCqvw5WNwvcw/L/auepRMTw=";
     };
 
     linuxMono = fetchurl {
       url = "https://github.com/godotengine/godot-builds/releases/download/${version}/Godot_v${version}_mono_linux_x86_64.zip";
-      hash = "sha256-ID3isuK0OqJ2XJvz+OKT1g3yTmDwKJ4EyEVKb/7yWps=";
+      hash = "sha256-Pme+vppdfyoQqVBegddtJLPBwFtqgmhNUfd5H3dEqWU=";
     };
 
     macosStandard = fetchurl {
       url = "https://github.com/godotengine/godot-builds/releases/download/${version}/Godot_v${version}_macos.${macosArch}.zip";
       hash = {
-        arm64 = "sha256-ErXAxLn7JzrvqeV+4MUmWN9KwEy/FDhONlv1TxtPHEc=";
-        x86_64 = "sha256-4sbKfPMO2+6Dht3W5fxK1NCMSxfa6X3qSNHog5fHXkE=";
+        arm64 = "sha256-uURkKrNYQy04Q4Wa2312T77mQYfTv/yDM9PM8qxs+Ks=";
+        x86_64 = "sha256-NMzOhXki6MOYKEm3sgja5Xub8ETn8QecTTYQ1zpdkdY=";
       }.${macosArch};
     };
 
     macosMono = fetchurl {
       url = "https://github.com/godotengine/godot-builds/releases/download/${version}/Godot_v${version}_mono_macos.${macosArch}.zip";
       hash = {
-        arm64 = "sha256-+PHK4lQ+jcZpWGME07xjLmDNKD+J3gvs39g40oiKjss=";
-        x86_64 = "sha256-vs+jZA7IbgzzrsNAZvLyNIOI8U73fLtkOuAalbYCdEM=";
+        arm64 = "sha256-ctjwt4jJslC6jaHLSCTEN5VMsqdYTKFZkReBiORIQlo=";
+        x86_64 = "sha256-ceBEUVyBI33ihUoMok8PBGR7G2TLoRJHHwANEOXylMs=";
       }.${macosArch};
     };
   };
