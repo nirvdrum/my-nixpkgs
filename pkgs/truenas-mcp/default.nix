@@ -20,13 +20,13 @@ let
 in
 (buildGo127Module.override { inherit go; }) (finalAttrs: {
   pname = "truenas-mcp";
-  version = "1.0.0";
+  version = "1.0.1";
 
   src = fetchFromGitHub {
     owner = "truenas";
     repo = "truenas-mcp";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-iZS6hqzTQQfCWsdK6f6jf/ItYPU3XNj3NJJNht6DtAM=";
+    hash = "sha256-GgZ8I4kRxJNrctqSg/PxAaksgdekQPL3bD4+eK2wCIU=";
   };
 
   vendorHash = "sha256-RCcyGLepRB1YMTb6hvAyskYTzHrKlwqjRdnRLfdydls=";
