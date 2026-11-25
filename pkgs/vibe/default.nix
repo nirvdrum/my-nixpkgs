@@ -7,7 +7,7 @@
 
 let
   pname = "vibe";
-  version = "2026-08-31-0858d69";
+  version = "2026-11-22-f5511df";
 in
 
 if stdenvNoCC.hostPlatform.system != "aarch64-darwin" then
@@ -20,7 +20,7 @@ else
 
     src = fetchurl {
       url = "https://github.com/lynaghk/vibe/releases/download/${version}/vibe-macos-arm64.zip";
-      hash = "sha256-7GXOa1QC9oidzPzBLdCTuCFvGTtcQOIsd/JYUvXvaA4=";
+      hash = "sha256-l0lT9hm6jsYAp9GBEMwXT9XKezH9t6nMJEXVhEW1MtQ=";
     };
 
     nativeBuildInputs = [ unzip ];
