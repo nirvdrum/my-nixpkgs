@@ -16,14 +16,14 @@
 
 let
   pname = "unsloth-desktop";
-  version = "0.1.922-beta";
+  version = "0.1.925-beta";
 in
 
 if stdenvNoCC.hostPlatform.isLinux then
   let
     src = fetchurl {
       url = "https://github.com/unslothai/unsloth/releases/download/v${version}/Unsloth-Desktop-Linux.AppImage";
-      hash = "sha256-FLmM+PpAV5Jg7EhwgJ6e9QgwPn1VbjvGvZVR61QH7Ls=";
+      hash = "sha256-lmRlSsIso707Igpgx1yEWZronPg6BAYjHbSXiaUCf8I=";
     };
 
     appimageContents = appimageTools.extract { inherit pname version src; };
@@ -254,7 +254,7 @@ else
 
     src = fetchurl {
       url = "https://github.com/unslothai/unsloth/releases/download/v${version}/Unsloth-Desktop-MacOS.dmg";
-      hash = "sha256-lUnu3ytTX00SEzP/gEz1TiWXCs/CjxCsC+63WVh5e8w=";
+      hash = "sha256-tgOG7vS50jDOqGvl88RCgRG53m9qcdomzQ2BFK7a1pI=";
     };
 
     nativeBuildInputs = [ undmg ];
